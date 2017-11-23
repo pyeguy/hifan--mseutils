@@ -4,11 +4,39 @@ import numpy as np
 from tqdm import tqdm
 from copy import copy
 
+from graphviz import Digraph
+
+
 H = 1.007825
-RT_WINDOW = (5/60) # 5sec window aka +/- 2.5sec
+RT_WINDOW = 0.6#(5/60) # 5sec window aka +/- 2.5sec
 CCS_PPT = 10 #10ppt aka 1%
 MZ_PPM = 5
+MS2_PPM = 25
 
+class Chunker(object):
+    def __init__(self,tochunk,chunk_size=250):
+        self.tochunk = tochunk
+        self.chunk_size = chunk_size
+        self.cnt = 0
+    
+    def __len__(self):
+        if len(self.tochunk) % self.chunk_size == 0:
+            return len(self.tochunk) // self.chunk_size
+        else:
+            return (len(self.tochunk) // self.chunk_size) + 1
+    
+    def __iter__(self):
+        return self # see __next__ for iteration
+
+    def __next__(self):
+        self.cnt +=1
+        if self.cnt > len(self):
+            raise StopIteration
+        i = (self.cnt  - 1) * self.chunk_size
+        try:
+            return self.tochunk[i:i+self.chunk_size]
+        except IndexError:
+            return self.tochunk[i:]
 
 class FuzzyCompare(object):
     __slots__ = ('val','val_range','window','error','error_func')
@@ -375,6 +403,13 @@ class MZD(object):
     def items(self):
         for key,val in self.d.items():
             yield key,val
+    def keys(self):
+        return self.d.keys()
+    def values(self):
+        return self.d.values()
+    def __iter__(self):
+        return self.d.__iter__()
+
 
     def __len__(self):
         return len(self.d)
@@ -385,6 +420,35 @@ class MZD(object):
     def __str__(self):
         return str(self.d)
 
+class MS2D(MZD):
+    def __init__(self,parent_mz,iterable=None,filt_thresh=0.01):
+        super().__init__(iterable)
+        self.parent_mz = parent_mz
+        self.filt_thresh = filt_thresh
+
+    def filter(self):
+        total = sum(self.values())
+        todel = []
+        for key,val in self.items():
+            if val / total < self.filt_thresh:
+                todel.append(key)
+        for key in todel: del self.d[key]
+
+
+    def make_graph(self,**kwargs):
+        dot = Digraph(**kwargs)
+        dot.node(name='ParentIon',label=str(self.parent_mz))
+        for i,mz in enumerate(self.keys()):
+            dot.node(name='DaughterIon_{}'.format(i),label=str(mz))
+            dot.edge('ParentIon','DaughterIon_{}'.format(i))
+        return dot
+
+    def _repr_svg_(self):
+        dot = self.make_graph()
+        binout = dot.pipe('svg')
+        return binout.decode('utf-8')
+
+
 class MseSpec(object):
     '''
     This is a class that holds a molecule spectrum from lcms data.
@@ -393,13 +457,14 @@ class MseSpec(object):
 
     '''
 
-    def __init__(self,mz,rt,ccs,ms2_data,mgf_files,n=0,rt_window=RT_WINDOW,ccs_ppt=CCS_PPT):
+    def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=[],n=0,rt_window=RT_WINDOW,ccs_ppt=CCS_PPT):
         self.mz = mz
         self.rt = RT(rt,window=rt_window)
         self.ccs = CCS(ccs,ppt=ccs_ppt)
         self.ms2_data = ms2_data
         self.mgf_files = mgf_files #needs work
         self.n = n
+        self.i = i
 
 
     @classmethod
@@ -412,7 +477,7 @@ class MseSpec(object):
     @property
     def ms2vect(self):
         v = np.zeros(2000)
-        ms2arr = np.rint(np.array([(ms2mz.mz,i) for ms2mz,i in self.ms2_data.items()]))
+        ms2arr = np.floor(np.array([(ms2mz.mz,i) for ms2mz,i in self.ms2_data.items()]))
         for mz,i in ms2arr:
             v[int(mz)] += i
         return v
@@ -463,7 +528,7 @@ class MseSpec(object):
         self.rt = (self.rt + other.rt) / 2
         self.ccs = (self.ccs + other.ccs) / 2 
         self.ms2_data.update(other.ms2_data)
-
+        self.i = (self.i + other.i) / 2
         self.n += 1
         self.mgf_files.extend(other.mgf_files)
         return self
@@ -496,86 +561,149 @@ class MseSpec(object):
         return hash(self.__repr__())
 
 
+
+
 def load_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
     df = pd.read_csv(csv_file)
-    gb = df.groupby(("RetTime","CCS","PrecMz","PrecZ","MgfFileName"))
+    # df = df[df.Ar1 > 0.33]
+    gb = df.groupby(("RetTime","CCS","PrecMz","PrecZ","MgfFileName",'PrecIntensity'))
     mss = []
     for gtup,gdf in tqdm(gb,"loading file"):
-        rt,ccs,mz,z,mgf_fname = gtup
+        rt,ccs,mz,z,mgf_fname,preci = gtup
         mzo = MZ(mz=mz,z=z,**mz_kwargs)
+
         ms2vals = gdf[['ProdMz','ProdIntensity']].values
         if ms2vals.any():
-            ms2 = MZD([(MZ(mz),i) for mz,i in ms2vals])
+            ms2 = MS2D(mz,[(MZ(mz,ppm=MS2_PPM),i) for mz,i in ms2vals])
+            ms2.filter()
         else:
-            ms2 = MZD()
+            ms2 = MS2D(mz)
         ms = MseSpec(
             mz=mzo,
             rt=rt,
             ccs=ccs,
             ms2_data=ms2,
             mgf_files=[mgf_fname],
+            i = preci, 
             **molspec_kwargs)
         mss.append(ms)
     return mss
 
 
-class Chunker(object):
-    def __init__(self,tochunk,chunk_size=250):
-        self.tochunk = tochunk
-        self.chunk_size = chunk_size
-        self.cnt = 0
-    
-    def __len__(self):
-        if len(self.tochunk) % self.chunk_size == 0:
-            return len(self.tochunk) // self.chunk_size
-        else:
-            return (len(self.tochunk) // self.chunk_size) + 1
-    
-    def __iter__(self):
-        return self # see __next__ for iteration
-
-    def __next__(self):
-        self.cnt +=1
-        if self.cnt > len(self):
-            raise StopIteration
-        i = (self.cnt  - 1) * self.chunk_size
-        try:
-            return self.tochunk[i:i+self.chunk_size]
-        except IndexError:
-            return self.tochunk[i:]
+def load_rep_csv(csv_file):
+    df = pd.read_csv(csv_file)
+    df['z'] = df.Precursor.apply(lambda x:x[1])
+    mss = []
+    for idx,row in df.iterrows():
+        mz = MZ(row["PrecMz"],row["z"])
+        ccs = row["CCS"]
+        rt = row["RetTime"]
+        ms2_data = MS2D(mz)
+        i = row["PrecIntensity"]
+        ms = MseSpec(
+            mz=mz,
+            ccs=ccs,
+            rt=rt,
+            ms2_data=ms2_data,
+            i=i)
+        mss.append(ms)
+    return mss
 
 
 
-
-import random 
-
-def load_replicate_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
-    mss = load_csv(csv_file, mz_kwargs, molspec_kwargs)
-    random.shuffle(mss)
+def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},molspec_kwargs={}):
+    pmss = load_rep_csv(rep_csv)
+    mss = load_csv(frag_csv_file)
     orig_len = len(mss)
     worst_case = (orig_len**2//2)-orig_len
     pbar = tqdm(total=worst_case,desc="combining MseSpec's")
     cmss = []
 
-    while len(mss) > 0:
-        search_ms = mss.pop(0)
+    while len(pmss) > 0:
+        search_ms = pmss.pop(0)
         if len(mss) > 0:
+            todel = []
             for i,ms in enumerate(mss):
                 try:
                     if search_ms == ms:
                         search_ms += ms
-                        del mss[i]
+                        todel.append(i)
                 except Exception as e:
                     print(search_ms.__repr__())
                     print(ms.__repr__())
                     raise e
-
-        cmss.append(search_ms)
+            todel.sort(reverse=True)
+            for i in todel: del mss[i]
+        if len(search_ms.mgf_files) >= 2:
+            cmss.append(search_ms)
         pbar.update(orig_len - len(mss))
     pbar.total = pbar.n #set the prog bar to 100%
     pbar.close()
     comb = len(cmss)
     print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
-
-
     return cmss
+
+def load_replicate_fragments_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
+    mss = load_csv(csv_file, mz_kwargs, molspec_kwargs)
+    orig_len = len(mss)
+    worst_case = (orig_len**2//2)-orig_len
+    pbar = tqdm(total=worst_case,desc="combining MseSpec's")
+    cmss = []
+    while len(mss) > 0:
+        search_ms = mss.pop(0)
+        if len(mss) > 0:
+            todel = []
+            for i,ms in enumerate(mss):
+                try:
+                    if search_ms == ms:
+                        search_ms += ms
+                        todel.append(i)
+                except Exception as e:
+                    print(search_ms.__repr__())
+                    print(ms.__repr__())
+                    raise e
+            todel.sort(reverse=True)
+            for i in todel: del mss[i]
+        if len(search_ms.mgf_files) >= 2:
+            cmss.append(search_ms)
+        pbar.update(orig_len - len(mss))
+    pbar.total = pbar.n #set the prog bar to 100%
+    pbar.close()
+    comb = len(cmss)
+    print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
+    return cmss
+
+
+## just a way to sanity check the non pw version
+# import networkx as nx
+# def load_replicate_csv_pw(csv_file,mz_kwargs={},molspec_kwargs={}):
+#     mss = load_csv(csv_file, mz_kwargs, molspec_kwargs)
+#     orig_len = len(mss)
+#     worst_case = (orig_len**2//2)-orig_len
+#     pbar = tqdm(total=worst_case,desc="combining MseSpec's")
+#     cmss_idx = []
+#     cmss = []
+#     for i,ms1 in enumerate(mss):
+#         for j,ms2 in enumerate(mss[i+1:]):
+#             if ms1 == ms2:
+#                 cmss_idx.append((i,i+j+1))
+
+#             pbar.update()
+#     pbar.close()
+#     seen = set([idx for tup in cmss_idx for idx in tup])
+#     g = nx.Graph()
+#     g.add_edges_from(cmss_idx)
+#     graphs = graphs = list(nx.connected_component_subgraphs(g)) 
+#     print("Adding Graphs")
+#     for graph in graphs:
+#         nodes = list(graph.nodes())
+#         to_grow = mss[nodes.pop(0)]
+#         for node in nodes:
+#             to_grow += mss[node]
+#         cmss.append(to_grow)
+#     unique = [ms for i,ms in enumerate(mss) if i not in seen]
+#     cmss.extend(unique)
+
+#     comb = len(cmss)
+#     print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
+#     return cmss
