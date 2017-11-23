@@ -14,6 +14,12 @@ MZ_PPM = 5
 MS2_PPM = 25
 
 class Chunker(object):
+    '''
+    this is a work in progress for making a chunking class.
+    ToDo: 
+        * make it a true generator class 
+            * think of a way to guess length 
+    '''
     def __init__(self,tochunk,chunk_size=250):
         self.tochunk = tochunk
         self.chunk_size = chunk_size
@@ -39,9 +45,18 @@ class Chunker(object):
             return self.tochunk[i:]
 
 class FuzzyCompare(object):
+    '''
+    Base class for comparing things with error ranges.
+    '''
     __slots__ = ('val','val_range','window','error','error_func')
     
     def __init__(self,val,window=0,error_func=None):
+        '''
+        Args:
+            val (number) : the value of the object
+            window (number) : error window aka val +/- window/2
+            error_func (function) : a function for computing error, used for ppx style error
+        '''
         self.val = val
         self.error_func = error_func
         if self.error_func is not None:
@@ -155,11 +170,19 @@ class FuzzyCompare(object):
         return "{val:.4f} +/- {error:.2g}".format(val=self.val, error=self.error)
 
 class RT(FuzzyCompare):
+    '''Retention time pass through class of FuzzyCompare'''
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
 
 class CCS(FuzzyCompare):
+    '''FuzzyCompare subclass for ccs values'''
     def __init__(self,val,ppt=0,error_func=None):
+        '''
+        Args:
+            val (flaot) : ccs value
+            ppt (float) : error in parts per thousand, used if error_func isn't specified
+            error_func (func): an error function for ccs error (should be probably be monotonic w/ val)
+        '''
         if error_func is None:
             error_func = lambda x:x * (ppt/1e3)
 
@@ -172,9 +195,15 @@ class MZ(object):
     """Numerical class to hold m/z values and do rich comparisons 
     and (some) math using the ppm error ranges.
     
-    Note: All math is currently done on the `mz` value, maybe it
+    ToDo:
+        * refactor to be a subclass of FuzzyCompare (i wrote this first..)
+
+    Notes: 
+    All math is currently done on the `mz` value, maybe it
     should be on the `m` value. I don't really know when you would
     use math on these objects but it feels like you might...
+
+
     """
     
     __slots__ = ['mh', 'z','mz', 'ppm', 'error', 'mz_range']
@@ -186,7 +215,7 @@ class MZ(object):
         Args:
             mz : precision mz
             z : charge (defaults to 1 making mz = m)
-            ppm : ppm error/precision of instrument (default = 5)
+            ppm : ppm error/precision of instrument 
 
         '''
         self.mz = mz
@@ -363,6 +392,10 @@ class MZD(object):
 
     '''
     def __init__(self,iterable=None):
+        '''
+        Args:
+            iterable : an iterable of 2 tuples of the form [(key,val)]
+        '''
         self.d = dict()
         if iterable:
             for key,val in iterable:
@@ -405,11 +438,12 @@ class MZD(object):
             yield key,val
     def keys(self):
         return self.d.keys()
+    
     def values(self):
         return self.d.values()
+    
     def __iter__(self):
         return self.d.__iter__()
-
 
     def __len__(self):
         return len(self.d)
@@ -421,12 +455,29 @@ class MZD(object):
         return str(self.d)
 
 class MS2D(MZD):
+    '''
+    Sub-class of MZD Specifically for holding ms2 data. 
+    A few extra methods are defined. 
+    '''
+
     def __init__(self,parent_mz,iterable=None,filt_thresh=0.01):
+        '''
+        additional MS2 specific attributes in __init__
+        Args:
+            parent_mz (MZ) : the mz of the parent ion
+            itearable : a iterable of 2 tuples in th form [(key,val)]
+            filt_thresh : intensity ratio for filtering ms2 ions, see filter()
+        '''
         super().__init__(iterable)
         self.parent_mz = parent_mz
         self.filt_thresh = filt_thresh
 
     def filter(self):
+        '''
+        function that takes all the current ms2 data and filters ions
+        based on intensity. Ions that have intensity/total < the `filt_thresh`
+        are thrown out. 
+        '''
         total = sum(self.values())
         todel = []
         for key,val in self.items():
@@ -436,18 +487,25 @@ class MS2D(MZD):
 
 
     def make_graph(self,**kwargs):
-        dot = Digraph(**kwargs)
-        dot.node(name='ParentIon',label=str(self.parent_mz))
+        '''
+        Makes a graphviz graph of the ion tree
+        Args:
+            **kwargs : keyword args to get passed to `graphviz.Digraph`
+        Returns:
+            dig : a `graphviz.Digraph` of the ion tree
+        '''
+        dig = Digraph(**kwargs)
+        dig.node(name='ParentIon',label=str(self.parent_mz))
         for i,mz in enumerate(self.keys()):
-            dot.node(name='DaughterIon_{}'.format(i),label=str(mz))
-            dot.edge('ParentIon','DaughterIon_{}'.format(i))
-        return dot
+            dig.node(name='DaughterIon_{}'.format(i),label=str(mz))
+            dig.edge('ParentIon','DaughterIon_{}'.format(i))
+        return dig
 
     def _repr_svg_(self):
+        '''hook for displaying graph in jupyter notebook'''
         dot = self.make_graph()
         binout = dot.pipe('svg')
         return binout.decode('utf-8')
-
 
 class MseSpec(object):
     '''
@@ -458,6 +516,22 @@ class MseSpec(object):
     '''
 
     def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=[],n=0,rt_window=RT_WINDOW,ccs_ppt=CCS_PPT):
+        '''
+        Args:
+            mz (MZ) : the mz of the parent ion
+            rt (RT) : the retention time of the parent ion
+            css (CCS) : the ccs of the parent ion
+            ms2_data (MS2D) : a MS2D of the ms2 data for the parent
+            i (float) : the intensity of the parent ion
+            n (int) : number of specs that make up the MseSpec obj
+            mgf_files (list) : a list of the mgf files that gave rise to the data
+            rt_window (float) : rt window in minutes
+            ccs_window : ccs error in parts per thousand ppt
+        ToDo:
+            * a lot...
+            * add __sub__ methods for blank subtraction?
+        '''
+
         self.mz = mz
         self.rt = RT(rt,window=rt_window)
         self.ccs = CCS(ccs,ppt=ccs_ppt)
@@ -469,13 +543,12 @@ class MseSpec(object):
 
     @classmethod
     def from_dict(cls,indict):
-        rt = indict['rt']
-        css = indict['css']
-        ms2_data = indict['ms2_data']
-        return cls(rt,css,ms2_data)
+        '''instantiate from a dict, if you are into that kind of thing'''
+        return cls(**indict)
 
     @property
     def ms2vect(self):
+        '''fooling around with a ms2 binned vect'''
         v = np.zeros(2000)
         ms2arr = np.floor(np.array([(ms2mz.mz,i) for ms2mz,i in self.ms2_data.items()]))
         for mz,i in ms2arr:
@@ -488,7 +561,7 @@ class MseSpec(object):
    
     def __eq__(self, other):
         '''
-        checks mz, rt and ccs equality right now, ms2 tbi
+        checks mz, rt and ccs equality right now, ms2 tbd
         '''
         if isinstance(other,self.__class__):
             rteq = self.rt == other.rt
@@ -516,7 +589,9 @@ class MseSpec(object):
         nccs = (self.ccs + other.ccs) / 2 
         nms2_data = copy(self.ms2_data).update(other.ms2_data)
         nn = self.n + 1
-        return MseSpec(nmz,nrt,nccs,nms2_data,n=nn)
+        i = (self.i + other.i) / 2 
+        mgf_files = self.mgf_files + other.mgf_files
+        return MseSpec(nmz,nrt,nccs,nms2_data,n=nn,i=i,mgf_files=mgf_files)
 
     def __radd__(self,other):
         return self.__add__(self,other)
