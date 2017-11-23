@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from copy import copy
-
+from matplotlib import cm
+from matplotlib.colors import rgb2hex
 from graphviz import Digraph
 
 
@@ -12,6 +13,8 @@ RT_WINDOW = 0.6#(5/60) # 5sec window aka +/- 2.5sec
 CCS_PPT = 10 #10ppt aka 1%
 MZ_PPM = 5
 MS2_PPM = 25
+
+cmapper = cm.ScalarMappable(cmap='viridis')
 
 class Chunker(object):
     '''
@@ -494,11 +497,22 @@ class MS2D(MZD):
         Returns:
             dig : a `graphviz.Digraph` of the ion tree
         '''
-        dig = Digraph(**kwargs)
+        dig = Digraph(node_attr={'penwidth':'3'},edge_attr={'penwidth':'2.5'},**kwargs)
         dig.node(name='ParentIon',label=str(self.parent_mz))
-        for i,mz in enumerate(self.keys()):
-            dig.node(name='DaughterIon_{}'.format(i),label=str(mz))
+        
+        items = list(self.items())
+        items.sort(key=lambda x:x[0].mz)
+        mzs = [x[0] for x in items]
+        intensities = [x[1] for x in items]
+        colors = cmapper.to_rgba(intensities)
+
+        for i,mzctup in enumerate(zip(mzs,colors)):
+            mz,colorv = mzctup
+            dig.node(name='DaughterIon_{}'.format(i),label=str(mz),
+                color=rgb2hex(colorv[:3]))
+            
             dig.edge('ParentIon','DaughterIon_{}'.format(i))
+
         return dig
 
     def _repr_svg_(self):
