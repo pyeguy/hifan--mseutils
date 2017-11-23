@@ -639,6 +639,9 @@ class MseSpec(object):
 
 
 def load_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
+    '''
+    Loads a csv file of frags and returns a list of MseSpec
+    '''
     df = pd.read_csv(csv_file)
     # df = df[df.Ar1 > 0.33]
     gb = df.groupby(("RetTime","CCS","PrecMz","PrecZ","MgfFileName",'PrecIntensity'))
@@ -666,6 +669,10 @@ def load_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
 
 
 def load_rep_csv(csv_file):
+    '''
+    Loads a csv file of replicate MS1 masses and returns a list 
+    of MseSpec's 
+    '''
     df = pd.read_csv(csv_file)
     df['z'] = df.Precursor.apply(lambda x:x[1])
     mss = []
@@ -686,7 +693,18 @@ def load_rep_csv(csv_file):
 
 
 
-def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},molspec_kwargs={}):
+def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={}):
+    '''
+    Loads a MS1 rep file and the MS2 rep_frag file and then combines all the frags
+    inso the MS1 masses where they exist.
+    Args:
+        rep_csv (str) : csv file of the replicated MS1's
+        frag_csv (str) : csv file of the rep fragments
+        mz_kwargs (dict) : a dict of any kwargs to pass to the MZ instantiation
+        msespec_kwargs (dict) : a dict of any kwargs to pass to the MseSpec instantiation
+    Returns:
+        cmss (list) : combined replicate MseSpecs 
+    '''
     pmss = load_rep_csv(rep_csv)
     mss = load_csv(frag_csv_file)
     orig_len = len(mss)
@@ -718,35 +736,38 @@ def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},molspec_kwargs={}):
     print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
     return cmss
 
-def load_replicate_fragments_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
-    mss = load_csv(csv_file, mz_kwargs, molspec_kwargs)
-    orig_len = len(mss)
-    worst_case = (orig_len**2//2)-orig_len
-    pbar = tqdm(total=worst_case,desc="combining MseSpec's")
-    cmss = []
-    while len(mss) > 0:
-        search_ms = mss.pop(0)
-        if len(mss) > 0:
-            todel = []
-            for i,ms in enumerate(mss):
-                try:
-                    if search_ms == ms:
-                        search_ms += ms
-                        todel.append(i)
-                except Exception as e:
-                    print(search_ms.__repr__())
-                    print(ms.__repr__())
-                    raise e
-            todel.sort(reverse=True)
-            for i in todel: del mss[i]
-        if len(search_ms.mgf_files) >= 2:
-            cmss.append(search_ms)
-        pbar.update(orig_len - len(mss))
-    pbar.total = pbar.n #set the prog bar to 100%
-    pbar.close()
-    comb = len(cmss)
-    print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
-    return cmss
+
+
+## old func.. should go but keeping it around for sentimental reasons
+# def load_replicate_fragments_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
+#     mss = load_csv(csv_file, mz_kwargs, molspec_kwargs)
+#     orig_len = len(mss)
+#     worst_case = (orig_len**2//2)-orig_len
+#     pbar = tqdm(total=worst_case,desc="combining MseSpec's")
+#     cmss = []
+#     while len(mss) > 0:
+#         search_ms = mss.pop(0)
+#         if len(mss) > 0:
+#             todel = []
+#             for i,ms in enumerate(mss):
+#                 try:
+#                     if search_ms == ms:
+#                         search_ms += ms
+#                         todel.append(i)
+#                 except Exception as e:
+#                     print(search_ms.__repr__())
+#                     print(ms.__repr__())
+#                     raise e
+#             todel.sort(reverse=True)
+#             for i in todel: del mss[i]
+#         if len(search_ms.mgf_files) >= 2:
+#             cmss.append(search_ms)
+#         pbar.update(orig_len - len(mss))
+#     pbar.total = pbar.n #set the prog bar to 100%
+#     pbar.close()
+#     comb = len(cmss)
+#     print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
+#     return cmss
 
 
 ## just a way to sanity check the non pw version
