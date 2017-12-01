@@ -6,14 +6,29 @@ from copy import copy
 from matplotlib import cm
 from matplotlib.colors import rgb2hex
 from graphviz import Digraph
+from collections import defaultdict
+from .bisect_collection import SortedCollection
 
 
 H = 1.007825
-RT_WINDOW = 0.6#(5/60) # 5sec window aka +/- 2.5sec
+RT_WINDOW = 0.06#(5/60) # 5sec window aka +/- 2.5sec
 CCS_PPT = 10 #10ppt aka 1%
 MZ_PPM = 5
 MS2_PPM = 25
+#print the tolerance values used by the module on import
+# can be changed by explicitly overriding in code using this module
+# eg.
+# >>>import mseutils
+# >>>mseutils.MZ_PPM = 10
+print("Global Tolerances:")
+print("#"*20)
+print("RT_WINDOW : {}".format(RT_WINDOW))
+print("CCS_PPT : {}".format(CCS_PPT))
+print("MZ_PPM : {}".format(MZ_PPM))
+print("MS2_PPM : {}".format(MS2_PPM))
+print("#"*20)
 
+# color mapper for generating ms2 trees
 cmapper = cm.ScalarMappable(cmap='viridis')
 
 class Chunker(object):
@@ -209,7 +224,7 @@ class MZ(object):
 
     """
     
-    __slots__ = ['mh', 'z','mz', 'ppm', 'error', 'mz_range']
+    __slots__ = ['mh', 'z','mz', 'ppm', 'error', 'mz_range','i']
     
     def __init__(self,mz,z=1,ppm=MZ_PPM):
         '''
@@ -251,8 +266,13 @@ class MZ(object):
 
     def __eq__(self, other):
         if isinstance(other,MZ):
-            eq1 = (other.mz_range[0] <= self.mz_range[1] <= other.mz_range[1])
-            eq2 = (other.mz_range[0] <= self.mz_range[0] <= other.mz_range[1])
+            try:
+                eq1 = (other.mz_range[0] <= self.mz_range[1] <= other.mz_range[1])
+                eq2 = (other.mz_range[0] <= self.mz_range[0] <= other.mz_range[1])
+            except Exception as e:
+                print(self.mz_range)
+                print(other.mz_range)
+                raise e
             if (eq1 or eq2) and (other.z == self.z):
                 return True
             else:
@@ -461,19 +481,24 @@ class MS2D(MZD):
     '''
     Sub-class of MZD Specifically for holding ms2 data. 
     A few extra methods are defined. 
+
+    ToDo:
+        * use a SortedCollection instead of self.d for faster search and insertion times 
     '''
 
-    def __init__(self,parent_mz,iterable=None,filt_thresh=0.01):
+    def __init__(self,parent_mz,i,iterable=None,filt_thresh=0.01):
         '''
         additional MS2 specific attributes in __init__
         Args:
             parent_mz (MZ) : the mz of the parent ion
-            itearable : a iterable of 2 tuples in th form [(key,val)]
-            filt_thresh : intensity ratio for filtering ms2 ions, see filter()
+            i (float) : intensity of parent ion
+            itearable (iterable) : a iterable of 2 tuples in th form [(key,val)]
+            filt_thresh (float) : intensity ratio for filtering ms2 ions, see filter()
         '''
         super().__init__(iterable)
         self.parent_mz = parent_mz
         self.filt_thresh = filt_thresh
+        self.i = i
 
     def filter(self):
         '''
@@ -521,6 +546,172 @@ class MS2D(MZD):
         binout = dot.pipe('svg')
         return binout.decode('utf-8')
 
+class MSND(MZD):
+    '''
+    NEEDS (LOTS OF) WORK
+    DO NOT USE YET!!!
+    Sub-class of MZD Specifically for holding msN data. 
+    A few extra methods are defined. 
+    '''
+
+    def __init__(self,mz,i,iterable=None,filt_thresh=0.01):
+        '''
+        additional MS2 specific attributes in __init__
+        Args:
+            parent_mz (MZ) : the mz of the parent ion
+            itearable : a iterable of 2 tuples in th form [(key,val)]
+            filt_thresh : intensity ratio for filtering ms2 ions, see filter()
+        '''
+        super().__init__(iterable)
+        self.mz = mz
+        self.i = i 
+        self.filt_thresh = filt_thresh
+
+
+    def __contains__(self,other):
+        if isinstance(other,self.__class__):
+            other = other.mz
+        for key in self.d.keys():
+            if key == other:
+                return True
+        return False
+
+    def __getitem__(self,key):
+        if isinstance(key,self.__class__):
+            key = key.mz
+        for skey in self.d.keys():
+            if key == skey:
+                return self.d[skey]
+                
+        raise KeyError(str(key))
+    
+    def _merge(self,msd1,msd2):
+        mz1,mz2 = msd1.mz,msd2.mz
+        ni = (msd1.i + msd2.i) /2
+        nmz = (mz1+mz2) / 2
+        new_msd = MSND(mz=nmz,i=ni)
+        for k1,v1 in msd1.items():
+            if k1 in msd2:
+                v2 = msd2[k1]
+                nv = (v1 + v2) / 2
+                nk = (k1 + msd2[k1]) / 2
+                new_msd[nk] = nv
+            else:
+                new_msd[k1] = v1
+        for k2,v2 in msd2.items():
+            if k2 not in new_msd:
+                new_msd[k2] = v2
+        return new_msd
+
+
+
+    def __setitem__(self,key,val):
+        '''
+        looks to see if there is a matching mz within ppm error,
+        if one is found then the mz's and intensities are averaged (mean)
+        '''
+                         
+        for skey in self.d.keys():
+            if key == skey:
+                if isinstance(val,self.__class__): # msN spec
+                    nkey = (key+skey) / 2 
+                    sval = self.d[skey]
+                    if isinstance(sval,self.__class__): #adding to a msN spec
+                        val = self._merge(val,sval)
+                        nkey.i = val.i
+                    else:
+                        nkey.i = self.d[skey] #set the intensity to be the ms2 int
+
+                    del self.d[skey]
+                    self.d[nkey] = val
+                    return
+
+                else: #ms2 spec
+                    nkey = (key+skey) / 2 
+                    nval = (self.d[skey] + val) / 2
+                    del self.d[skey]
+                    self.d[nkey] = nval
+                    return
+        
+        if isinstance(val,self.__class__):
+            key.i = val.i
+        self.d[key] = val #if not found set the val
+
+    def filter(self):
+        '''
+        function that takes all the current ms2 data and filters ions
+        based on intensity. Ions that have intensity/total < the `filt_thresh`
+        are thrown out. 
+        '''
+        total = sum([v if not isinstance(v,self.__class__) else v.mz.i for v in self.values()])
+        todel = []
+        for key,val in self.items():
+            if val / total < self.filt_thresh:
+                todel.append(key)
+        for key in todel: del self.d[key]
+
+    def __get_layers(self,msnd,layers=[[]],i=0):
+        'recursively decend the msn tree and return a list of layers'
+        pmz = self.mz
+        for k,v in msnd.items():
+            if isinstance(v,self.__class__):
+                layers[i].append((pmz,k,k.i))
+                layers.append([])
+                return self._get_layers(v,layers,i+1)
+            else:
+                layers[i].append((pmz,k,v))
+        return layers
+
+    def _get_layers(self,msnd):
+        'iteratively decend the ms3 tree and return a list of layers'
+        layers = [[],[]]
+        pmz = msnd.mz
+        for k,v in msnd.items():
+            if isinstance(v,self.__class__):
+                layers[0].append((pmz,k,k.i))
+                pmz2 = v.mz
+                for k3,v3 in v.items():
+                    layers[1].append((pmz2,k3,v3))
+            else:
+                layers[0].append((pmz,k,v))
+        return layers
+
+    def _add_layer_graph(self,layer,dig):
+        'mutator func to add a layer to a digraph'
+        intensities = [x[2] for x in layer]
+        print(intensities)
+        colors = cmapper.to_rgba(intensities)
+        dig.node(name=str(layer[0][0]),label=str(layer[0][0]))
+        for l,colorv in zip(layer,colors):
+            dig.node(name=str(l[1]),label=str(l[1]),
+                color=rgb2hex(colorv[:3])) 
+
+            dig.edge(str(l[0]),str(l[1]))
+
+    def make_graph(self,**kwargs):
+        '''
+        Makes a graphviz graph of the ion tree
+        Args:
+            **kwargs : keyword args to get passed to `graphviz.Digraph`
+        Returns:
+            dig : a `graphviz.Digraph` of the ion tree
+        '''
+        dig = Digraph(node_attr={'penwidth':'3'},edge_attr={'penwidth':'2.5'},**kwargs)
+        for layer in self._get_layers(self):
+            if layer:
+                self._add_layer_graph(layer,dig)
+        return dig
+
+    def _repr_svg_(self):
+        '''hook for displaying graph in jupyter notebook'''
+        dot = self.make_graph()
+        binout = dot.pipe('svg')
+        return binout.decode('utf-8')
+
+    def __eq__(self,other):
+        '''tolerate other ms2d instances for msn style data'''
+        raise NotImplemented("can't compare MSND's yet")
+
 class MseSpec(object):
     '''
     This is a class that holds a molecule spectrum from lcms data.
@@ -529,7 +720,7 @@ class MseSpec(object):
 
     '''
 
-    def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=[],n=0,rt_window=RT_WINDOW,ccs_ppt=CCS_PPT):
+    def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=[],n=0,src_frag=[],rt_window=RT_WINDOW,ccs_ppt=CCS_PPT):
         '''
         Args:
             mz (MZ) : the mz of the parent ion
@@ -538,11 +729,12 @@ class MseSpec(object):
             ms2_data (MS2D) : a MS2D of the ms2 data for the parent
             i (float) : the intensity of the parent ion
             n (int) : number of specs that make up the MseSpec obj
+            src_frag (list) : a list of other MseSpecs that are source fragments of this spec 
             mgf_files (list) : a list of the mgf files that gave rise to the data
             rt_window (float) : rt window in minutes
             ccs_window : ccs error in parts per thousand ppt
         ToDo:
-            * a lot...
+            * a lot of possible functionality..
             * add __sub__ methods for blank subtraction?
         '''
 
@@ -553,7 +745,7 @@ class MseSpec(object):
         self.mgf_files = mgf_files #needs work
         self.n = n
         self.i = i
-
+        self.src_frags = []
 
     @classmethod
     def from_dict(cls,indict):
@@ -565,9 +757,20 @@ class MseSpec(object):
         '''fooling around with a ms2 binned vect'''
         v = np.zeros(2000)
         ms2arr = np.floor(np.array([(ms2mz.mz,i) for ms2mz,i in self.ms2_data.items()]))
-        for mz,i in ms2arr:
-            v[int(mz)] += i
+        if ms2arr.shape[0] > 0:
+            mzvs, inties = ms2arr.T
+            relinties = inties / np.sum(inties)
+            for mz,i in zip(mzvs,relinties):
+                v[int(mz)] += i
+            
         return v
+
+    @property
+    def n_src_frags(self):
+        return len(self.src_frags)
+    
+    def add_src_frag(self,other):
+        self.src_frags.append(other)
 
     ################
     # Comparisons  #
@@ -596,7 +799,7 @@ class MseSpec(object):
             return False
     
     def __add__(self,other):
-        if not isinstance(other,self):
+        if not isinstance(other,self.__class__):
             raise TypeError(type(other))
         nmz = (self.mz + other.mz) / 2
         nrt = (self.rt + other.rt) / 2
@@ -634,13 +837,20 @@ class MseSpec(object):
             ccs=self.ccs)
         return outstr
     
+    # def __repr__(self):
+    #     return "{classn}(mz={mz},rt={rt},ccs={ccs},{ms2_data})".format(
+    #         classn = self.__class__.__name__,
+    #         mz = self.mz,
+    #         rt = self.rt,
+    #         ccs = self.ccs,
+    #         ms2_data = self.ms2_data)
     def __repr__(self):
-        return "{classn}(mz={mz},rt={rt},ccs={ccs},{ms2_data})".format(
+        return "{classn}(mz={mz},rt={rt},ccs={ccs})".format(
             classn = self.__class__.__name__,
             mz = self.mz,
             rt = self.rt,
-            ccs = self.ccs,
-            ms2_data = self.ms2_data)
+            ccs = self.ccs)
+
 
     ########
     # Hash #  
@@ -656,24 +866,26 @@ These Fucntions Should Probably go into another module...
 '''
 
 
-def load_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
+def load_frag_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
     '''
-    Loads a csv file of frags and returns a list of MseSpec
+    Loads a csv file of that includes fragments and returns a list of MseSpec
     '''
+    print("reading csv file and grouping...")
     df = pd.read_csv(csv_file)
     # df = df[df.Ar1 > 0.33]
     gb = df.groupby(("RetTime","CCS","PrecMz","PrecZ","MgfFileName",'PrecIntensity'))
     mss = []
-    for gtup,gdf in tqdm(gb,"loading file"):
+    print('creating MseSpecs')
+    for gtup,gdf in tqdm(gb,"processing file"):
         rt,ccs,mz,z,mgf_fname,preci = gtup
         mzo = MZ(mz=mz,z=z,**mz_kwargs)
 
         ms2vals = gdf[['ProdMz','ProdIntensity']].values
         if ms2vals.any():
-            ms2 = MS2D(mz,[(MZ(mz,ppm=MS2_PPM),i) for mz,i in ms2vals])
+            ms2 = MS2D(mz,preci,[(MZ(mz,ppm=MS2_PPM),i) for mz,i in ms2vals])
             ms2.filter()
         else:
-            ms2 = MS2D(mz)
+            ms2 = MS2D(mz,preci)
         ms = MseSpec(
             mz=mzo,
             rt=rt,
@@ -684,7 +896,6 @@ def load_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
             **molspec_kwargs)
         mss.append(ms)
     return mss
-
 
 def load_rep_csv(csv_file):
     '''
@@ -698,8 +909,8 @@ def load_rep_csv(csv_file):
         mz = MZ(row["PrecMz"],row["z"])
         ccs = row["CCS"]
         rt = row["RetTime"]
-        ms2_data = MS2D(mz)
         i = row["PrecIntensity"]
+        ms2_data = MS2D(mz,i)
         ms = MseSpec(
             mz=mz,
             ccs=ccs,
@@ -709,9 +920,7 @@ def load_rep_csv(csv_file):
         mss.append(ms)
     return mss
 
-
-
-def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={}):
+def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={}):
     '''
     Loads a MS1 rep file and the MS2 rep_frag file and then combines all the frags
     inso the MS1 masses where they exist.
@@ -724,35 +933,62 @@ def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={}):
         cmss (list) : combined replicate MseSpecs 
     '''
     pmss = load_rep_csv(rep_csv)
-    mss = load_csv(frag_csv_file)
-    orig_len = len(mss)
-    worst_case = (orig_len**2//2)-orig_len
-    pbar = tqdm(total=worst_case,desc="combining MseSpec's")
+    mss = load_frag_csv(frag_csv_file)
+    print(mss[0].rt.val)
+    smss = SortedCollection(mss,key= lambda x:x.rt.val)
+
     cmss = []
 
-    while len(pmss) > 0:
-        search_ms = pmss.pop(0)
-        if len(mss) > 0:
-            todel = []
-            for i,ms in enumerate(mss):
+    for search_ms in tqdm(pmss,desc="combining MseSpec's"):
+        rt_chunk = smss.find_between(*search_ms.rt.val_range)
+        if rt_chunk:
+            for i,ms in enumerate(rt_chunk):
                 try:
                     if search_ms == ms:
                         search_ms += ms
-                        todel.append(i)
+
                 except Exception as e:
                     print(search_ms.__repr__())
                     print(ms.__repr__())
                     raise e
-            todel.sort(reverse=True)
-            for i in todel: del mss[i]
         if len(search_ms.mgf_files) >= 2:
             cmss.append(search_ms)
-        pbar.update(orig_len - len(mss))
-    pbar.total = pbar.n #set the prog bar to 100%
-    pbar.close()
+
     comb = len(cmss)
-    print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
+    print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
     return cmss
+
+def src_frags(mol_specs):
+    '''
+    Takes a list of combined MseSpecs and looks for source fragments
+    This is done by looking in a given rt window for MseSpec's whose parent
+    ion is in the ms2_data of another spec.
+    '''
+    sms = SortedCollection(mol_specs,key=lambda x:x.rt.val)
+    src_frg_idxs = defaultdict(list)
+    for i,ms1 in enumerate(tqdm(sms)):
+        rt_chunk = sms.find_between(*ms1.rt.val_range)
+        if rt_chunk:
+            for ms2 in rt_chunk:
+                if ms2.mz in ms1.ms2_data:
+                    src_frg_idxs[i].append(ms2)
+                else:
+                    src_frg_idxs[i] = []
+        else:
+            print("No rt elements between {} and {}".format(*ms1.rt.val_range))
+            src_frg_idxs[i] = []
+    print("combining srg frags...")
+    combined = []
+    for idx,frgs in src_frg_idxs.items():
+        parent = copy(sms[idx]) #does this copy need to be here?
+        for frg in frgs:
+            if frg is not parent:
+                parent.add_src_frag(frg)
+        combined.append(parent)
+    return combined
+
+
+
 
 
 
@@ -818,6 +1054,51 @@ def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={}):
 #     unique = [ms for i,ms in enumerate(mss) if i not in seen]
 #     cmss.extend(unique)
 
+#     comb = len(cmss)
+#     print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
+#     return cmss
+
+#legacy func, probably will delete all this after a commit
+
+# def load_rep_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={}):
+#     '''
+#     Loads a MS1 rep file and the MS2 rep_frag file and then combines all the frags
+#     inso the MS1 masses where they exist.
+#     Args:
+#         rep_csv (str) : csv file of the replicated MS1's
+#         frag_csv (str) : csv file of the rep fragments
+#         mz_kwargs (dict) : a dict of any kwargs to pass to the MZ instantiation
+#         msespec_kwargs (dict) : a dict of any kwargs to pass to the MseSpec instantiation
+#     Returns:
+#         cmss (list) : combined replicate MseSpecs 
+#     '''
+#     pmss = load_rep_csv(rep_csv)
+#     mss = load_csv(frag_csv_file)
+#     orig_len = len(mss)
+#     worst_case = (orig_len**2//2)-orig_len
+#     pbar = tqdm(total=worst_case,desc="combining MseSpec's")
+#     cmss = []
+
+#     while len(pmss) > 0:
+#         search_ms = pmss.pop(0)
+#         if len(mss) > 0:
+#             todel = []
+#             for i,ms in enumerate(mss):
+#                 try:
+#                     if search_ms == ms:
+#                         search_ms += ms
+#                         todel.append(i)
+#                 except Exception as e:
+#                     print(search_ms.__repr__())
+#                     print(ms.__repr__())
+#                     raise e
+#             todel.sort(reverse=True)
+#             for i in todel: del mss[i]
+#         if len(search_ms.mgf_files) >= 2:
+#             cmss.append(search_ms)
+#         pbar.update(orig_len - len(mss))
+#     pbar.total = pbar.n #set the prog bar to 100%
+#     pbar.close()
 #     comb = len(cmss)
 #     print("{} combined spec ({:.2f}%)".format(comb,(orig_len-comb)/orig_len *100))
 #     return cmss
