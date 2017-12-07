@@ -897,3 +897,31 @@ class MseSpec(object):
         return hash(self.__repr__())
 
 
+def src_frags(mol_specs):
+    '''
+    Takes a list of combined MseSpecs and looks for source fragments
+    This is done by looking in a given rt window for MseSpec's whose parent
+    ion is in the ms2_data of another spec.
+    '''
+    sms = SortedCollection(mol_specs,key=lambda x:x.rt.val)
+    src_frg_idxs = defaultdict(list)
+    for i,ms1 in enumerate(tqdm(sms)):
+        rt_chunk = sms.find_between(*ms1.rt.val_range)
+        if rt_chunk:
+            for ms2 in rt_chunk:
+                if ms2.mz in ms1.ms2_data:
+                    src_frg_idxs[i].append(ms2)
+                else:
+                    src_frg_idxs[i] = []
+        else:
+            # tqdm.write("No rt elements between {} and {}".format(*ms1.rt.val_range)) # debug line
+            src_frg_idxs[i] = []
+    print("combining srg frags...")
+    combined = []
+    for idx,frgs in src_frg_idxs.items():
+        parent = sms[idx]
+        for frg in frgs:
+            if frg is not parent:
+                parent.add_src_frag(frg)
+        combined.append(parent)
+    return combined

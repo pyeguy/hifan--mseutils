@@ -3,9 +3,14 @@ import os
 from .utils import *
 
 def load_mgf(mgfname):
+    '''load a mgf file and output the MseSpecs'''
     mgf_reader = mgf.read(mgfname)
     filename = os.path.basename(mgfname).split('.')[0]
-    mses = [MseSpec.from_mgf_dict(spec,filename) for spec in mgf_reader]
+    # commented out in favor of tqdm for loop
+    # mses = [MseSpec.from_mgf_dict(spec,filename) for spec in mgf_reader]
+    mses = []
+    for spec in tqdm(mgf_reader,desc='loading mgf'):
+        mses.append(MseSpec.from_mgf_dict(spec,filename))        
     return mses
 
 
@@ -101,31 +106,3 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
     print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
     return cmss
 
-def src_frags(mol_specs):
-    '''
-    Takes a list of combined MseSpecs and looks for source fragments
-    This is done by looking in a given rt window for MseSpec's whose parent
-    ion is in the ms2_data of another spec.
-    '''
-    sms = SortedCollection(mol_specs,key=lambda x:x.rt.val)
-    src_frg_idxs = defaultdict(list)
-    for i,ms1 in enumerate(tqdm(sms)):
-        rt_chunk = sms.find_between(*ms1.rt.val_range)
-        if rt_chunk:
-            for ms2 in rt_chunk:
-                if ms2.mz in ms1.ms2_data:
-                    src_frg_idxs[i].append(ms2)
-                else:
-                    src_frg_idxs[i] = []
-        else:
-            print("No rt elements between {} and {}".format(*ms1.rt.val_range))
-            src_frg_idxs[i] = []
-    print("combining srg frags...")
-    combined = []
-    for idx,frgs in src_frg_idxs.items():
-        parent = copy(sms[idx]) #does this copy need to be here?
-        for frg in frgs:
-            if frg is not parent:
-                parent.add_src_frag(frg)
-        combined.append(parent)
-    return combined
