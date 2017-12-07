@@ -19,7 +19,8 @@ the `-e` flag on the pip install allows the code to be editible so if you pull n
 
 
 # Usage
-I'll get around to describing usage soonish.. I'll make an example folder with some sample input data and a jupyter notebook with a few examples. 
+Check out the `examples` folder for the `BasicUsage.ipynb` that goes over a little bit of the intended use. 
+
 
 # Notes
 * This repo is a work in progress, there are no guarantees that the API won't change drastically, caveat emptor
