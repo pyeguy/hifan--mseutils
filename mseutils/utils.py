@@ -106,9 +106,11 @@ class FuzzyCompare(object):
 
     def __eq__(self, other):
         if isinstance(other,self.__class__):
-            eq1 = (other.val_range[0] <= self.val_range[1] <= other.val_range[1])
-            eq2 = (other.val_range[0] <= self.val_range[0] <= other.val_range[1])
-            if eq1 or eq2:
+            # eq1 = (other.val_range[0] <= self.val_range[1] <= other.val_range[1])
+            # eq2 = (other.val_range[0] <= self.val_range[0] <= other.val_range[1])
+            eqboth = (other.val_range[0] <= self.val_range[1]) and (self.val_range[1] <= other.val_range[1])
+            # if eq1 or eq2:
+            if eqboth:
                 return True
             else:
                 return False
@@ -267,13 +269,15 @@ class MZ(object):
     def __eq__(self, other):
         if isinstance(other,MZ):
             try:
-                eq1 = (other.mz_range[0] <= self.mz_range[1] <= other.mz_range[1])
-                eq2 = (other.mz_range[0] <= self.mz_range[0] <= other.mz_range[1])
+                # eq1 = (other.mz_range[0] <= self.mz_range[1] <= other.mz_range[1])
+                # eq2 = (other.mz_range[0] <= self.mz_range[0] <= other.mz_range[1])
+                eqboth = (other.mz_range[0] <= self.mz_range[1]) and (self.mz_range[1] <= other.mz_range[1])
             except Exception as e:
                 print(self.mz_range)
                 print(other.mz_range)
                 raise e
-            if (eq1 or eq2) and (other.z == self.z):
+            # if (eq1 or eq2) and (other.z == self.z):
+            if eqboth and (other.z == self.z):
                 return True
             else:
                 return False
