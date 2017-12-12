@@ -813,6 +813,20 @@ class MseSpec(object):
     def add_src_frag(self,other):
         self.src_frags.append(other)
 
+    def to_dict(self):
+        d = {
+        'rt' : self.rt.val,
+        'ccs' : self.ccs.val,
+        'mz' : self.mz.mz,
+        'z' : self.mz.z,
+        'ms2' : list(self.ms2_data.items()),
+        'mgf_files' : self.mgf_files,
+        'src_frags' : [srcf.mz.mz for srcf in self.src_frags],
+        }
+        return d
+
+
+
     ################
     # Comparisons  #
     ################
