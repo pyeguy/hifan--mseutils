@@ -62,10 +62,10 @@ def gen_rep_file_pairs(path):
     for fname in csv_files:
         lfname = fname.lower()
         if lfname.endswith('replicated.csv'): 
-            sampid = lfname.strip("_replicated.csv")
+            sampid = fname.strip("_replicated.csv")
             iddict[sampid]['rep']=fname
         elif lfname.endswith('rep_fragments.csv'): 
-            sampid = lfname.strip("_rep_fragments.csv")
+            sampid = fname.strip("_rep_fragments.csv")
             iddict[sampid]['frag']=fname
 
     rep_file_pairs = []
@@ -109,16 +109,14 @@ numlines is an optional argument used only as a fall-back.
     print('\n' * numlines)
 
 def main():
+    st = time.time()
     args = parse_args()
     if args.tolerances:
         print_tolerances()
     if args.source_frags:
         rfts = gen_rep_file_pairs(args.source_frags)
-        # for rft in tqdm(rfts,desc='Combining Specs'):
-        #     load_and_src_frag(rft)
-        st = time.time()
         with ProcessPoolExecutor(max_workers=args.procs)  as executor:
-            clearscreen()
+            # clearscreen()
             pbar = tqdm(total=len(rfts),desc='Combining Specs')
             futs = [executor.submit(load_and_src_frag,rft) for rft in rfts]
             for comp in as_completed(futs):
