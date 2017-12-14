@@ -9,7 +9,8 @@ def load_mgf(mgfname):
     # commented out in favor of tqdm for loop
     # mses = [MseSpec.from_mgf_dict(spec,filename) for spec in mgf_reader]
     mses = []
-    for spec in tqdm(mgf_reader,desc='loading mgf'):
+    # for spec in tqdm(mgf_reader,desc='loading mgf'):
+    for spec in mgf_reader: # no pbar
         mses.append(MseSpec.from_mgf_dict(spec,filename))        
     return mses
 
@@ -18,13 +19,14 @@ def load_frag_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
     '''
     Loads a csv file of that includes fragments and returns a list of MseSpec
     '''
-    print("reading csv file and grouping...")
+    # print("reading csv file and grouping...")
     df = pd.read_csv(csv_file)
     # df = df[df.Ar1 > 0.33]
     gb = df.groupby(("RetTime","CCS","PrecMz","PrecZ","MgfFileName",'PrecIntensity'))
     mss = []
-    print('creating MseSpecs')
-    for gtup,gdf in tqdm(gb,"processing file"):
+    # print('creating MseSpecs')
+    # for gtup,gdf in tqdm(gb,"processing file"):
+    for gtup,gdf in gb: # no pbar
         rt,ccs,mz,z,mgf_fname,preci = gtup
         mzo = MZ(mz=mz,z=z,**mz_kwargs)
 
@@ -82,12 +84,11 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
     '''
     pmss = load_rep_csv(rep_csv)
     mss = load_frag_csv(frag_csv_file)
-    print(mss[0].rt.val)
     smss = SortedCollection(mss,key= lambda x:x.rt.val)
-
     cmss = []
 
-    for search_ms in tqdm(pmss,desc="combining MseSpec's"):
+    # for search_ms in tqdm(pmss,desc="combining MseSpec's"):
+    for search_ms in pmss: # no pbar
         rt_chunk = smss.find_between(*search_ms.rt.val_range)
         if rt_chunk:
             for i,ms in enumerate(rt_chunk):
@@ -103,6 +104,6 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
             cmss.append(search_ms)
 
     comb = len(cmss)
-    print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
+    # print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
     return cmss
 

@@ -15,18 +15,20 @@ RT_WINDOW = 0.06#(5/60) # 5sec window aka +/- 2.5sec
 CCS_PPT = 10 #10ppt aka 1%
 MZ_PPM = 5
 MS2_PPM = 25
-#print the tolerance values used by the module on import
 # can be changed by explicitly overriding in code using this module
 # eg.
 # >>>import mseutils
 # >>>mseutils.MZ_PPM = 10
-print("Global Tolerances:")
-print("#"*20)
-print("RT_WINDOW : {}".format(RT_WINDOW))
-print("CCS_PPT : {}".format(CCS_PPT))
-print("MZ_PPM : {}".format(MZ_PPM))
-print("MS2_PPM : {}".format(MS2_PPM))
-print("#"*20)
+
+def print_tolerances():
+    '''print the tolerance values used by the module '''
+    print("Global Tolerances:")
+    print("#"*20)
+    print("RT_WINDOW : {}".format(RT_WINDOW))
+    print("CCS_PPT : {}".format(CCS_PPT))
+    print("MZ_PPM : {}".format(MZ_PPM))
+    print("MS2_PPM : {}".format(MS2_PPM))
+    print("#"*20)
 
 # color mapper for generating ms2 trees
 cmapper = cm.ScalarMappable(cmap='viridis')
@@ -826,6 +828,21 @@ class MseSpec(object):
         return d
 
 
+    def to_frags(self):
+        l = [
+        {
+        'rt' : self.rt.val,
+        'ccs' : self.ccs.val,
+        'parent_mz' : self.mz.mz,
+        'parent_z' : self.mz.z,
+        'parent_intsensity': self.i,
+        'frag_mz' : fragmz.mz,
+        'fag_intensity' : fragi,
+        'mgf_files' : self.mgf_files,
+        'src_frags' : ','.join([srcf.mz.mz for srcf in self.src_frags]),
+        } for fragmz,fragi in self.ms2_data.items()]
+        return l
+
 
     ################
     # Comparisons  #
@@ -923,7 +940,8 @@ def src_frags(mol_specs):
     '''
     sms = SortedCollection(mol_specs,key=lambda x:x.rt.val)
     src_frg_idxs = defaultdict(list)
-    for i,ms1 in enumerate(tqdm(sms)):
+    # for i,ms1 in enumerate(tqdm(sms)):
+    for i,ms1 in enumerate(sms): #no pbar
         rt_chunk = sms.find_between(*ms1.rt.val_range)
         if rt_chunk:
             for ms2 in rt_chunk:
@@ -934,7 +952,7 @@ def src_frags(mol_specs):
         else:
             # tqdm.write("No rt elements between {} and {}".format(*ms1.rt.val_range)) # debug line
             src_frg_idxs[i] = []
-    print("combining srg frags...")
+    # print("combining srg frags...")
     combined = []
     for idx,frgs in src_frg_idxs.items():
         parent = sms[idx]
