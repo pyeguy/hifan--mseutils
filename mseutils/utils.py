@@ -955,7 +955,8 @@ def src_frags(mol_specs):
     # print("combining srg frags...")
     combined = []
     for idx,frgs in src_frg_idxs.items():
-        parent = sms[idx]
+        parent = copy(sms[idx]) #added copy... funky mutability going on 
+
         for frg in frgs:
             if frg is not parent:
                 parent.add_src_frag(frg)

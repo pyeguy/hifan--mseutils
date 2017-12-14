@@ -89,6 +89,7 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
 
     # for search_ms in tqdm(pmss,desc="combining MseSpec's"):
     for search_ms in pmss: # no pbar
+        search_ms = copy(search_ms) # added copy here... necissary?
         rt_chunk = smss.find_between(*search_ms.rt.val_range)
         if rt_chunk:
             for i,ms in enumerate(rt_chunk):
@@ -103,7 +104,7 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
         if len(search_ms.mgf_files) >= 2:
             cmss.append(search_ms)
 
-    comb = len(cmss)
+    # comb = len(cmss)
     # print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
     return cmss
 
