@@ -21,6 +21,8 @@ the `-e` flag on the pip install allows the code to be editible so if you pull n
 # Usage
 Check out the `examples` folder for the `BasicUsage.ipynb` that goes over a little bit of the intended use. 
 
+### Command Line Tool
+There's also a new command line script that's been added and will be installed with the pip install. It should be immediately accesible after installation as `mseutils` Right now its fuctionality is solely around identifying potential source fragments. More to come.
 
 # Notes
 * This repo is a work in progress, there are no guarantees that the API won't change drastically, caveat emptor
