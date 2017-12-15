@@ -26,16 +26,30 @@ from . import *
 
 from collections import namedtuple
 
-h5_ret_tup = namedtuple('h5_ret_tup','h5 group table')
+h5_ret_tup = namedtuple('h5_ret_tup','h5 group parent_table srcfrg_table')
 
 def create_h5_file(fname,title=''):
     h5 = tbls.open_file(fname,mode='w',title=title)
     group = h5.create_group("/","msedata","MSe Data")
-    table = h5.create_table(group, "mse_specs",MSE,"MSe Spectra")
+    parent_table = h5.create_table(group, "mse_specs",MSE,"MSe Spectra")
+    srcfrg_tbl = h5.create_table(group,'source_frags',MSE,"Source Fragments")
+    return h5_ret_tup(h5,group,parent_table,srcfrg_tbl)
+
+def open_h5_file(fname,mode,group_name,table_name):
+    '''return a h5_ret_tup'''
+    h5 = tbls.open_file(fname,mode)
+    group = h5.get_node("/{}".format(group_name))
+    table = h5.get_node("/{}/{}".format(group_name,table_name))
     return h5_ret_tup(h5,group,table)
 
-def add_mse(mse,idx,t):
-    r = t.row
+
+def add_mse(mse,idx,parent_t,srcfrg_t):
+    '''
+    lots of shitty encoding decoding
+
+    '''
+    r = parent_t.row
+    r['sampid'] = mse.sampid
     r['idx'] = idx
     r['rt'] = mse.rt.val
     r['ccs'] = mse.ccs.val
@@ -51,10 +65,13 @@ def add_mse(mse,idx,t):
     srcfrgarr = [idx+i+1 for i in range(len(mse.src_frags))]
     srcfrgarr.extend([0 for _ in range(SRC_FRG_ARR_LEN-len(srcfrgarr))])
     r['src_frag_ids'] = srcfrgarr
-
     r.append()
+
+    # this should be recursive?
     for srcfrg in mse.src_frags:
+        r = srcfrg_t.row
         idx +=1
+        r['sampid'] = mse.sampid
         r['idx'] = idx
         r['rt'] = srcfrg.rt.val
         r['ccs'] = srcfrg.ccs.val
@@ -70,13 +87,27 @@ def add_mse(mse,idx,t):
     return idx
 
 
-def add_mses(mses,idx=0):
+def add_mses(mses,h5t,idx=0,sampid='n/a'):
+    parent_t = h5t.parent_table
+    srcfrg_t = h5t.srcfrg_table
     for mse in mses:
-        idx = 1 + add_mse(mse,idx)
+        mse.sampid = sampid 
+        idx = 1 + add_mse(mse,idx,parent_t,srcfrg_t)
+    parent_t.flush()
+    srcfrg_t.flush()
     return idx
 
+
+def save_h5(fname,mses):
+    h5t = create_h5_file(fname)
+    add_mses(mses,h5t.parent_table,h5t.srcfrg_table)
+    return h5t
+
+
+
 class MSE(tbls.IsDescription):
-    idx = tbls.UInt64Col()
+    idx = tbls.Int64Col()
+    sampid = tbls.StringCol(itemsize=64)
     rt = tbls.Float32Col()
     ccs = tbls.Float64Col()
     mz = tbls.Float64Col()

@@ -9,6 +9,7 @@ from graphviz import Digraph
 from collections import defaultdict
 from .bisect_collection import SortedCollection
 
+from functools import partial
 
 H = 1.007825
 RT_WINDOW = 0.06#(5/60) # 5sec window aka +/- 2.5sec
@@ -196,6 +197,11 @@ class RT(FuzzyCompare):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
 
+# this is out here to make the CCS class pickalable. 
+def _ccs_efunc(x,ppt):
+    return x*(ppt/1e3)
+
+
 class CCS(FuzzyCompare):
     '''FuzzyCompare subclass for ccs values'''
     def __init__(self,val,ppt=0,error_func=None):
@@ -206,7 +212,8 @@ class CCS(FuzzyCompare):
             error_func (func): an error function for ccs error (should be probably be monotonic w/ val)
         '''
         if error_func is None:
-            error_func = lambda x:x * (ppt/1e3)
+        #ugly use of partial b/c you can't use a lambda or local func and be pickalable..
+            error_func = partial(_ccs_efunc,ppt=ppt) 
 
         super().__init__(val,error_func=error_func)
     
@@ -528,11 +535,14 @@ class MS2D(MZD):
         Returns:
             dig : a `graphviz.Digraph` of the ion tree
         '''
+        def _get_first(x):
+            return x[0]
         dig = Digraph(node_attr={'penwidth':'3'},edge_attr={'penwidth':'2.5'},**kwargs)
         dig.node(name='ParentIon',label=str(self.parent_mz))
         
         items = list(self.items())
-        items.sort(key=lambda x:x[0].mz)
+
+        items.sort(key=_get_first)
         mzs = [x[0] for x in items]
         intensities = [x[1] for x in items]
         colors = cmapper.to_rgba(intensities)
@@ -752,7 +762,7 @@ class MseSpec(object):
         self.n = n
         self.i = i
         self.src_frags = []
-        for name,att in kwargs:
+        for name,att in kwargs.items():
             self.__setattr__(name,att)
 
     @classmethod
@@ -804,7 +814,7 @@ class MseSpec(object):
         rt = row['rt']
         ccs = row['ccs']
         mgf_files = [s for s in row['mgf_files'].decode().split('|')]
-        src_frag_ids = [x for x in row['src_frag_ids'] if x!=0]
+        src_frag_ids = sorted([x for x in row['src_frag_ids'] if x!=0])
         return cls(mz=mz, rt=rt, ccs=ccs, i=i,
             ms2_data=ms2_data, mgf_files=mgf_files, src_frag_ids=src_frag_ids)
 
