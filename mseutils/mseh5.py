@@ -80,7 +80,9 @@ def add_mse(mse,idx,parent_t,srcfrg_t):
         r['z'] = srcfrg.mz.z
         r['n'] = srcfrg.n
         r['intensity'] = srcfrg.i
-        r['ms2_data'] = [[mz.mz,i] for mz,i in srcfrg.ms2_data.items()]
+        ms2arr = [[mz.mz,i] for mz,i in mse.ms2_data.items()]
+        ms2arr.extend([[0,0] for _ in range(MS2_ARR_LEN-len(ms2arr))])
+        r['ms2_data'] = ms2arr
         r['mgf_files'] = "|".join(srcfrg.mgf_files)
         r['src_frag_ids'] = [idx+i+1 for i in range(len(srcfrg.src_frags))]
         r.append()
