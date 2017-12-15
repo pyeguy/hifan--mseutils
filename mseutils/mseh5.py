@@ -84,7 +84,9 @@ def add_mse(mse,idx,parent_t,srcfrg_t):
         ms2arr.extend([[0,0] for _ in range(MS2_ARR_LEN-len(ms2arr))])
         r['ms2_data'] = ms2arr
         r['mgf_files'] = "|".join(srcfrg.mgf_files)
-        r['src_frag_ids'] = [idx+i+1 for i in range(len(srcfrg.src_frags))]
+        srcfrgarr = [idx+i+1 for i in range(len(mse.src_frags))]
+        srcfrgarr.extend([0 for _ in range(SRC_FRG_ARR_LEN-len(srcfrgarr))])
+        r['src_frag_ids'] = srcfrgarr        
         r.append()
     return idx
 

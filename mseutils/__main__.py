@@ -145,7 +145,6 @@ def main():
                     e = fut.exception()
                     if e:
                         raise e
-                    
                     sampid,mses = fut.result()
                     idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)
                 pbar.update()
