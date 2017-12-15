@@ -108,3 +108,6 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
     # print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
     return cmss
 
+def load_h5(fname,group_name='msedata',table_name='mse_specs'):
+    '''dont forget to add in source frags'''
+    pass

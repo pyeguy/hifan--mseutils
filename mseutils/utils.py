@@ -726,7 +726,7 @@ class MseSpec(object):
 
     '''
 
-    def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=[],n=0,src_frag=[],rt_window=RT_WINDOW,ccs_ppt=CCS_PPT):
+    def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=[],n=0,src_frag=[],rt_window=RT_WINDOW,ccs_ppt=CCS_PPT,**kwargs):
         '''
         Args:
             mz (MZ) : the mz of the parent ion
@@ -752,6 +752,8 @@ class MseSpec(object):
         self.n = n
         self.i = i
         self.src_frags = []
+        for name,att in kwargs:
+            self.__setattr__(name,att)
 
     @classmethod
     def from_dict(cls,indict):
@@ -794,6 +796,17 @@ class MseSpec(object):
         return cls(mz=mz, rt=rt, ccs=ccs, i=i,
             ms2_data=ms2_data, mgf_files=mgf_files)
 
+    @classmethod
+    def from_h5_row(cls,row):
+        mz = MZ(row['mz'],row['z'],row['ppm'])
+        i = row['intensity']
+        ms2_data = MS2D(mz,i,[(MZ(mz,1,MS2_PPM),i) for mz,i in row['ms2_data'] if mz != 0.0])
+        rt = row['rt']
+        ccs = row['ccs']
+        mgf_files = [s for s in row['mgf_files'].decode().split('|')]
+        src_frag_ids = [x for x in row['src_frag_ids'] if x!=0]
+        return cls(mz=mz, rt=rt, ccs=ccs, i=i,
+            ms2_data=ms2_data, mgf_files=mgf_files, src_frag_ids=src_frag_ids)
 
     @property
     def ms2vect(self):

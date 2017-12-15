@@ -3,15 +3,91 @@ Work in progress...
 
 This should be a mapping to HDF5 file format which I think is a natural fit for this MS data..
 Might be overkill..
+
+Basic Structure - 
+root /
+    MSeData / 
+        samp1/
+            
+        samp2
+        samp3
+        ... 
+
+
 '''
 
-import tables
+MS2_ARR_LEN = 100
+MGF_FILE_STR_LEN = 5000
+SRC_FRG_ARR_LEN = 50 
+
+import tables as tbls
 
 from . import *
 
-class MZ(tables.IsDescription):
-    mz = tables.Float64Col()
-    ppm = tables.Float64Col() 
-    z = tables.Int8Col()
-    intensity = tables.Float64Col()
+from collections import namedtuple
+
+h5_ret_tup = namedtuple('h5_ret_tup','h5 group table')
+
+def create_h5_file(fname,title=''):
+    h5 = tbls.open_file(fname,mode='w',title=title)
+    group = h5.create_group("/","msedata","MSe Data")
+    table = h5.create_table(group, "mse_specs",MSE,"MSe Spectra")
+    return h5_ret_tup(h5,group,table)
+
+def add_mse(mse,idx,t):
+    r = t.row
+    r['idx'] = idx
+    r['rt'] = mse.rt.val
+    r['ccs'] = mse.ccs.val
+    r['mz'] = mse.mz.mz
+    r['ppm'] = mse.mz.ppm
+    r['z'] = mse.mz.z
+    r['n'] = mse.n
+    r['intensity'] = mse.i
+    ms2arr = [[mz.mz,i] for mz,i in mse.ms2_data.items()]
+    ms2arr.extend([[0,0] for _ in range(MS2_ARR_LEN-len(ms2arr))])
+    r['ms2_data'] = ms2arr
+    r['mgf_files'] = "|".join(mse.mgf_files)
+    srcfrgarr = [idx+i+1 for i in range(len(mse.src_frags))]
+    srcfrgarr.extend([0 for _ in range(SRC_FRG_ARR_LEN-len(srcfrgarr))])
+    r['src_frag_ids'] = srcfrgarr
+
+    r.append()
+    for srcfrg in mse.src_frags:
+        idx +=1
+        r['idx'] = idx
+        r['rt'] = srcfrg.rt.val
+        r['ccs'] = srcfrg.ccs.val
+        r['mz'] = srcfrg.mz.mz
+        r['ppm'] = srcfrg.mz.ppm
+        r['z'] = srcfrg.mz.z
+        r['n'] = srcfrg.n
+        r['intensity'] = srcfrg.i
+        r['ms2_data'] = [[mz.mz,i] for mz,i in srcfrg.ms2_data.items()]
+        r['mgf_files'] = "|".join(srcfrg.mgf_files)
+        r['src_frag_ids'] = [idx+i+1 for i in range(len(srcfrg.src_frags))]
+        r.append()
+    return idx
+
+
+def add_mses(mses,idx=0):
+    for mse in mses:
+        idx = 1 + add_mse(mse,idx)
+    return idx
+
+class MSE(tbls.IsDescription):
+    idx = tbls.UInt64Col()
+    rt = tbls.Float32Col()
+    ccs = tbls.Float64Col()
+    mz = tbls.Float64Col()
+    ppm = tbls.Float64Col()
+    z = tbls.Int8Col()
+    intensity = tbls.Float64Col()
+    n = tbls.UInt8Col() 
+    ms2_data = tbls.Float64Col(shape=(MS2_ARR_LEN,2))
+    mgf_files = tbls.StringCol(itemsize=MGF_FILE_STR_LEN)
+    src_frag_ids = tbls.UInt64Col(shape=SRC_FRG_ARR_LEN)
+
+
+
 
