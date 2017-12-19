@@ -17,6 +17,8 @@ viola!
 
 the `-e` flag on the pip install allows the code to be editible so if you pull new updates from this repository using `$ git pull` then the next time you import the code the  changes will be reflected. 
 
+Since this is under active development it's (usually) a good idea to `git pull` first to pull down the latest code. But the API isn't quite stable that might break something you've written on top of it so proceed with caution. 
+
 
 # Usage
 Check out the `examples` folder for the `BasicUsage.ipynb` that goes over a little bit of the intended use. 

@@ -29,6 +29,16 @@ from collections import namedtuple
 h5_ret_tup = namedtuple('h5_ret_tup','h5 group parent_table srcfrg_table')
 
 def create_h5_file(fname,title=''):
+    '''
+    Creates a h5 file on disk. Will overwrite old file with same name.
+
+    Args:
+        fname (str) = the filename that will be used as the h5 file
+        title (str) = optional title to include in the file
+    Returns:
+        h5_ret_tup : a named tuple which has the hdf5 object (h5) group, 
+            parent_table, and source
+    '''
     h5 = tbls.open_file(fname,mode='w',title=title)
     group = h5.create_group("/","msedata","MSe Data")
     parent_table = h5.create_table(group, "mse_specs",MSE,"MSe Spectra")
@@ -41,7 +51,6 @@ def open_h5_file(fname,mode,group_name,table_name):
     group = h5.get_node("/{}".format(group_name))
     table = h5.get_node("/{}/{}".format(group_name,table_name))
     return h5_ret_tup(h5,group,table)
-
 
 def add_mse(mse,idx,parent_t,srcfrg_t):
     '''
@@ -90,7 +99,6 @@ def add_mse(mse,idx,parent_t,srcfrg_t):
         r.append()
     return idx
 
-
 def add_mses(mses,h5t,idx=0,sampid='n/a'):
     parent_t = h5t.parent_table
     srcfrg_t = h5t.srcfrg_table
@@ -101,13 +109,10 @@ def add_mses(mses,h5t,idx=0,sampid='n/a'):
     srcfrg_t.flush()
     return idx
 
-
 def save_h5(fname,mses):
     h5t = create_h5_file(fname)
     add_mses(mses,h5t.parent_table,h5t.srcfrg_table)
     return h5t
-
-
 
 class MSE(tbls.IsDescription):
     idx = tbls.Int64Col()

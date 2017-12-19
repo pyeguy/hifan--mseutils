@@ -85,7 +85,6 @@ def gen_rep_file_pairs(path):
             print("Bad sampid {}".format(sampid))
     return rep_file_pairs
 
-
 def load_and_src_frag(rft,write_flat_file=False):
     mses = file_parsers.load_rep_and_frags_csv(rft.rep_fname,rft.frag_fname)
     combined = src_frags(mses)
@@ -99,20 +98,19 @@ def load_and_src_frag(rft,write_flat_file=False):
     else:
         return sampid,combined
 
-
 def clearscreen(numlines=100):
-  """Clear the console.
-numlines is an optional argument used only as a fall-back.
-"""
-# Thanks to Steven D'Aprano, http://www.velocityreviews.com/forums
+    """Clear the console.
+    numlines is an optional argument used only as a fall-back.
+    """
+    # Thanks to Steven D'Aprano, http://www.velocityreviews.com/forums
 
-  if os.name == "posix":
+    if os.name == "posix":
     # Unix/Linux/MacOS/BSD/etc
     os.system('clear')
-  elif os.name in ("nt", "dos", "ce"):
+    elif os.name in ("nt", "dos", "ce"):
     # DOS/Windows
     os.system('CLS')
-  else:
+    else:
     # Fallback for other operating systems.
     print('\n' * numlines)
 
@@ -138,7 +136,10 @@ def main():
         with ProcessPoolExecutor(max_workers=args.procs)  as executor:
             # clearscreen()
             pbar = tqdm(total=len(rfts),desc='Combining Specs')
-            futs = [executor.submit(load_and_src_frag,rft) for rft in rfts]
+            if not args.h5:
+                futs = [executor.submit(load_and_src_frag,rft,True) for rft in rfts]
+            else:
+                futs = [executor.submit(load_and_src_frag,rft) for rft in rfts]
             idx =0
             for fut in as_completed(futs):
                 if args.h5:
@@ -154,9 +155,6 @@ def main():
     et = time.time() - st
     print('Done!')
     print('Took {:.2f}min'.format(et/60))
-
-
-
 
 if __name__ == '__main__':
     main()

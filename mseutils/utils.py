@@ -1,7 +1,7 @@
 
-import pandas as pd
+# import pandas as pd
 import numpy as np
-from tqdm import tqdm
+# from tqdm import tqdm
 from copy import copy
 from matplotlib import cm
 from matplotlib.colors import rgb2hex
@@ -12,9 +12,9 @@ from .bisect_collection import SortedCollection
 from functools import partial
 
 H = 1.007825
-RT_WINDOW = 0.06#(5/60) # 5sec window aka +/- 2.5sec
+RT_WINDOW = 0.2 # 0.2min window aka +/- 0.1min
 CCS_PPT = 10 #10ppt aka 1%
-MZ_PPM = 5
+MZ_PPM = 25
 MS2_PPM = 25
 # can be changed by explicitly overriding in code using this module
 # eg.
@@ -200,7 +200,6 @@ class RT(FuzzyCompare):
 # this is out here to make the CCS class pickalable. 
 def _ccs_efunc(x,ppt):
     return x*(ppt/1e3)
-
 
 class CCS(FuzzyCompare):
     '''FuzzyCompare subclass for ccs values'''
@@ -954,7 +953,6 @@ class MseSpec(object):
     def __hash__(self):
         return hash(self.__repr__())
 
-
 def src_frags(mol_specs):
     '''
     Takes a list of combined MseSpecs and looks for source fragments
@@ -963,22 +961,22 @@ def src_frags(mol_specs):
     '''
     sms = SortedCollection(mol_specs,key=lambda x:x.rt.val)
     src_frg_idxs = defaultdict(list)
-    # for i,ms1 in enumerate(tqdm(sms)):
-    for i,ms1 in enumerate(sms): #no pbar
-        rt_chunk = sms.find_between(*ms1.rt.val_range)
+    # for i,msA in enumerate(tqdm(sms)):
+    for i,msA in enumerate(sms): #no pbar
+        rt_chunk = sms.find_between(*msA.rt.val_range)
         if rt_chunk:
-            for ms2 in rt_chunk:
-                if ms2.mz in ms1.ms2_data:
-                    src_frg_idxs[i].append(ms2)
+            for msB in rt_chunk:
+                if msB.mz in msA.msB_data:
+                    src_frg_idxs[i].append(msB)
                 else:
                     src_frg_idxs[i] = []
         else:
-            # tqdm.write("No rt elements between {} and {}".format(*ms1.rt.val_range)) # debug line
+            # tqdm.write("No rt elements between {} and {}".format(*msA.rt.val_range)) # debug line
             src_frg_idxs[i] = []
     # print("combining srg frags...")
     combined = []
     for idx,frgs in src_frg_idxs.items():
-        parent = copy(sms[idx]) #added copy... funky mutability going on 
+        parent = copy(sms[idx]) #added copy... funky mutability issues going on 
 
         for frg in frgs:
             if frg is not parent:

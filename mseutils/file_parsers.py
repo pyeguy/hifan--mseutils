@@ -2,6 +2,7 @@ from pyteomics import mgf
 import os
 from .utils import *
 from . import mseh5
+
 def load_mgf(mgfname):
     '''load a mgf file and output the MseSpecs'''
     mgf_reader = mgf.read(mgfname)
@@ -13,7 +14,6 @@ def load_mgf(mgfname):
     for spec in mgf_reader: # no pbar
         mses.append(MseSpec.from_mgf_dict(spec,filename))        
     return mses
-
 
 def load_frag_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
     '''
