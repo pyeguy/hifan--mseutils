@@ -6,6 +6,7 @@ import os
 from collections import namedtuple, defaultdict
 import time
 from concurrent.futures import ProcessPoolExecutor,as_completed
+from tqdm import tqdm
 
 rep_file_tup = namedtuple("rep_file_tup",('rep_fname', 'frag_fname', 'sampid','path'))
 
