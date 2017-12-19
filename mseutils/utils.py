@@ -966,7 +966,7 @@ def src_frags(mol_specs):
         rt_chunk = sms.find_between(*msA.rt.val_range)
         if rt_chunk:
             for msB in rt_chunk:
-                if msB.mz in msA.msB_data:
+                if msB.mz in msA.ms2_data:
                     src_frg_idxs[i].append(msB)
                 else:
                     src_frg_idxs[i] = []
