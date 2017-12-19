@@ -8,7 +8,8 @@ from matplotlib.colors import rgb2hex
 from graphviz import Digraph
 from collections import defaultdict
 from .bisect_collection import SortedCollection
-
+import pandas as pd
+from tqdm import tqdm
 from functools import partial
 
 H = 1.007825
