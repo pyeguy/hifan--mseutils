@@ -16,7 +16,7 @@ root /
 
 '''
 
-MS2_ARR_LEN = 100
+MS2_ARR_LEN = 200
 MGF_FILE_STR_LEN = 5000
 SRC_FRG_ARR_LEN = 50 
 
