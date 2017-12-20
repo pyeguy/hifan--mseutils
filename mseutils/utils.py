@@ -12,6 +12,8 @@ import pandas as pd
 from tqdm import tqdm
 from functools import partial
 
+import operator
+
 H = 1.007825
 RT_WINDOW = 0.2 # 0.2min window aka +/- 0.1min
 CCS_PPT = 10 #10ppt aka 1%
@@ -251,7 +253,7 @@ class MZ(object):
         self.z = int(z)
         self.ppm = ppm
         self.mh = (self.mz / self.z) - ((self.z-1) * H) #assumes only H adducts
-        self.error = self.mz * (self.ppm / 10e6)
+        self.error = self.mz * (self.ppm / 1e6)
         self.mz_range = (
             (self.mz - self.error), 
             (self.mz + self.error))
@@ -984,3 +986,8 @@ def src_frags(mol_specs):
                 parent.add_src_frag(frg)
         combined.append(parent)
     return combined
+
+
+
+
+

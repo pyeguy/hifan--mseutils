@@ -192,11 +192,13 @@ class SortedCollection(object):
             return self._items[i]
         raise ValueError('No item found with key above: %r' % (k,))
 
-    def find_between(self,j,k):
+    def find_between(self,j,k,return_idxs=False):
         'find elements betwen the j and k vals'
         if j >= k:
             raise ValueError("j must be less than k")
         jidx = bisect_left(self._keys,j)
         kidx = bisect_right(self._keys,k)
-        if jidx and kidx:
+        if return_idxs:
+            return (jidx,kidx)
+        else:    
             return self._items[jidx:kidx]

@@ -98,6 +98,7 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
                         search_ms += ms
 
                 except Exception as e:
+                    pritn("Exception in Combining following MseSpecs:")
                     print(search_ms.__repr__())
                     print(ms.__repr__())
                     raise e
@@ -123,3 +124,4 @@ def load_h5(fname,mode='r', group_name='msedata',parent_tbl='mse_specs'):
         mses.append(mse)
 
     return mses
+
