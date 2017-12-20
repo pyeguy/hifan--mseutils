@@ -251,7 +251,7 @@ class MZ(object):
         self.z = int(z)
         self.ppm = ppm
         self.mh = (self.mz / self.z) - ((self.z-1) * H) #assumes only H adducts
-        self.error = self.mz * (self.ppm / 10e6)
+        self.error = self.mz * (self.ppm / 1e6)
         self.mz_range = (
             (self.mz - self.error), 
             (self.mz + self.error))
