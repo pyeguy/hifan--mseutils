@@ -962,32 +962,31 @@ def src_frags(mol_specs):
     This is done by looking in a given rt window for MseSpec's whose parent
     ion is in the ms2_data of another spec.
     '''
-    sms = SortedCollection(mol_specs,key=lambda x:x.rt.val)
-    src_frg_idxs = defaultdict(list)
+    sms = SortedCollection(mol_specs,key=operator.attrgetter('rt.val'))
+    src_frg_idxs = set()
+    src_frgs = defaultdict(list)
     # for i,msA in enumerate(tqdm(sms)):
     for i,msA in enumerate(sms): #no pbar
-        rt_chunk = sms.find_between(*msA.rt.val_range)
+        rt_chunk_idxs = sms.find_between(*msA.rt.val_range,return_idxs=True)
+        rt_chunk = sms[rt_chunk_idxs[0]:rt_chunk_idxs[1]]
         if rt_chunk:
-            for msB in rt_chunk:
+            for j,msB in enumerate(rt_chunk):
                 if msB.mz in msA.ms2_data:
-                    src_frg_idxs[i].append(msB)
+                    src_frgs[i].append(msB)
+                    src_frg_idxs.add(i+j)
                 else:
-                    src_frg_idxs[i] = []
+                    src_frgs[i]
         else:
-            # tqdm.write("No rt elements between {} and {}".format(*msA.rt.val_range)) # debug line
-            src_frg_idxs[i] = []
+            # print("No rt elements between {} and {}".format(*msA.rt.val_range)) # debug line
+            src_frgs[i] = []
     # print("combining srg frags...")
     combined = []
-    for idx,frgs in src_frg_idxs.items():
-        parent = copy(sms[idx]) #added copy... funky mutability issues going on 
-
-        for frg in frgs:
-            if frg is not parent:
-                parent.add_src_frag(frg)
-        combined.append(parent)
+    for idx,frgs in src_frgs.items():
+        if idx not in src_frg_idxs:
+            parent = copy(sms[idx]) #added copy... funky mutability issues going on 
+            for frg in frgs:
+                if frg is not parent:
+                    parent.add_src_frag(frg)
+            combined.append(parent)
     return combined
-
-
-
-
 
