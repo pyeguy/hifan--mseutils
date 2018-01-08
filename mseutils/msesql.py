@@ -86,10 +86,10 @@ def _make_val_tup(idx,mse):
         mse.mz.mz,
         mse.mz.ppm,
         mse.mz.z,
-        mse.n,
+        len(mse.mgf_files), #this shouldn't be necissary..
         mse.i,
         json.dumps([[mz.mz,i] for mz,i in mse.ms2_data.items()]),
-        json.dumps(mse.mgf_files),
+        json.dumps(set(mse.mgf_files)),
         json.dumps([idx+i+1 for i in range(len(mse.src_frags))])
         )
     return idx,vals
@@ -134,13 +134,17 @@ def gen_mses(dbname,tbl_name='mse_specs',query=None):
         pbar = tqdm(total=cur.rowcount)
         frag_cur =conn.cursor()
         while True:
-            lod = cur.fetchmany(1000)
-            if lod:
-                for d in lod:
-                    mse = MseSpec.from_sqlite_dict(d)
+            row_dicts = cur.fetchmany(1000)
+            if row_dicts:
+                for rd in row_dicts:
+                    mse = MseSpec.from_sqlite_dict(rd)
                     if mse.src_frag_ids:
                         frag_ids = '('+ ",".join(map(str,mse.src_frag_ids)) + ")"
-                        frag_cur.execute("SELECT * from source_frags WHERE idx IN {frag_ids}".format(frag_ids=frag_ids))
+                        frag_cur.execute(
+                            """SELECT * FROM source_frags 
+                            WHERE idx IN {frag_ids}"""
+                            .format(frag_ids=frag_ids)
+                            )
                         for frag_row in frag_cur.fetchall():
                             mse.src_frags.append(MseSpec.from_sqlite_dict(frag_row))
                     pbar.update()

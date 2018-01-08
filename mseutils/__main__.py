@@ -143,7 +143,6 @@ def main():
             # clearscreen()
             pbar = tqdm(total=len(rfts),desc='Combining Specs')
             if not args.h5 and not args.sqlite:
-                print("IN THE UPSIDEDOWN")
                 futs = [executor.submit(load_and_src_frag,rft,write_flat_file=True) for rft in rfts]
             else:
                 futs = [executor.submit(load_and_src_frag,rft) for rft in rfts]
