@@ -764,7 +764,7 @@ class MseSpec(object):
         self.mgf_files = mgf_files #needs work
         self.n = n
         self.i = i
-        self.src_frags = set()
+        self.src_frags = []
         for name,att in kwargs.items():
             self.__setattr__(name,att)
 
