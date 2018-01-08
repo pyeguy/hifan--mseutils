@@ -9,7 +9,7 @@ import json
 
 
 CREATE_TBL_SQL = """
-    DROP TABLE IF EXISTS {tbl_name};
+    
     CREATE TABLE {tbl_name}(
     idx INTEGER PRIMARY KEY,
     sampid TEXT,
@@ -23,7 +23,7 @@ CREATE_TBL_SQL = """
     ms2_data TEXT,
     mgf_files TEXT,
     src_frag_ids TEXT
-    );
+    )
 
     """
 CREATE_INDEX_SQL = """
@@ -64,6 +64,7 @@ INSERT_SQL = """
 def create_mse_table(conn,tbl_name):
     try:
         cur = conn.cursor()
+        cur.execute("DROP TABLE IF EXISTS {tbl_name}".format(tbl_name=tbl_name))
         cur.execute(CREATE_TBL_SQL.format(tbl_name=tbl_name))
         index_cols = "sampid,rt,ccs,mz"
         cur.execute(CREATE_INDEX_SQL.format(tbl_name=tbl_name,col_name=index_cols))
