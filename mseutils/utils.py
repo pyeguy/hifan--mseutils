@@ -12,6 +12,7 @@ import pandas as pd
 from tqdm import tqdm
 from functools import partial
 
+import json
 import operator
 
 H = 1.007825
@@ -768,9 +769,23 @@ class MseSpec(object):
             self.__setattr__(name,att)
 
     @classmethod
-    def from_dict(cls,indict):
+    def from_sqlite_dict(cls,indict):
         '''instantiate from a dict, if you are into that kind of thing'''
+        indict['mz'] = MZ(indict['mz'],ppm=indict['ppm'],z=indict['z'])
+        indict['ms2_data'] = MS2D(indict['mz'],indict['i'],json.loads(indict['ms2_data']))
+        indict['mgf_files'] = json.loads(indict['mgf_files'])
+        indict['src_frag_ids'] = json.loads(indict["src_frag_ids"])
         return cls(**indict)
+    
+    # def to_dict(self):
+    #     '''inverse of from dict'''
+    #     d = {}
+    #     d['mz'] = self.mz.mz
+    #     d['rt'] = self.rt.val
+    #     d['ccs'] = self.ccs.val
+    #     d['ms2_data']  = [[mz,i] for mz,i in self.ms2_data.items()]
+    #     d['mgf_files'] = mgf_files
+
 
     @classmethod
     def from_mgf_dict(cls,mgfd,mgfname):
@@ -819,6 +834,7 @@ class MseSpec(object):
         src_frag_ids = sorted([x for x in row['src_frag_ids'] if x!=0])
         return cls(mz=mz, rt=rt, ccs=ccs, i=i,
             ms2_data=ms2_data, mgf_files=mgf_files, src_frag_ids=src_frag_ids)
+
 
     @property
     def ms2vect(self):

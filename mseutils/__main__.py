@@ -1,6 +1,7 @@
 from .utils import *
 from . import file_parsers
 from . import mseh5
+from . import msesql
 import argparse
 import os
 from collections import namedtuple, defaultdict
@@ -54,6 +55,8 @@ def parse_args():
     parser.add_argument("-p","--procs",help='number of procs to use on multiproc functions',default=2,type=int)
     parser.add_argument("--tolerances",help='print the tolerances used',action="store_true")
     parser.add_argument("--h5",help="write an HDF5 file with all the Mse data in the path",action="store_true")
+    parser.add_argument("--sqlite",help="write to a SQLite database with all the Mse data",action="store_true")
+    
     args = parser.parse_args()
     return args
 
@@ -124,6 +127,8 @@ def main():
         rfts = gen_rep_file_pairs(args.source_frags)
         if args.h5:
             h5t = mseh5.create_h5_file("Output.h5")
+        if args.sqlite:
+            conn = msesql.create_db("Output")
 
         ################################
         ## Single Proc for Debugging ##
@@ -137,18 +142,23 @@ def main():
         with ProcessPoolExecutor(max_workers=args.procs)  as executor:
             # clearscreen()
             pbar = tqdm(total=len(rfts),desc='Combining Specs')
-            if not args.h5:
-                futs = [executor.submit(load_and_src_frag,rft,True) for rft in rfts]
+            if not args.h5 and not args.sqlite:
+                print("IN THE UPSIDEDOWN")
+                futs = [executor.submit(load_and_src_frag,rft,write_flat_file=True) for rft in rfts]
             else:
                 futs = [executor.submit(load_and_src_frag,rft) for rft in rfts]
             idx =0
             for fut in as_completed(futs):
-                if args.h5:
+                if args.h5 or args.sqlite:
                     e = fut.exception()
                     if e:
                         raise e
                     sampid,mses = fut.result()
-                    idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)
+                    if args.h5:
+                        idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)
+                    if args.sqlite:
+                        idx = msesql.add_mses(conn,mses,sampid=sampid,idx=idx)
+
                 pbar.update()
         pbar.close()
         if args.h5:

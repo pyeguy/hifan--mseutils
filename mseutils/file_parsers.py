@@ -109,16 +109,21 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
     # print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
     return cmss
 
-def load_h5(fname,mode='r', group_name='msedata',parent_tbl='mse_specs'):
+def load_h5(fname,mode='r', group_name='msedata',parent_tbl='mse_specs', srcfrg_tbl='source_frags',head=None):
     '''dont forget to add in source frags'''
-    h5t = mseh5.open_h5_file(fname,mode,group_name,parent_tbl)
-    parent_table = h5t.table
-    srcfrg_table = h5t.h5.get_node("/msedata/source_frags")
+    h5t = mseh5.open_h5_file(fname,mode,group_name,parent_tbl,srcfrg_tbl)
+    parent_table = h5t.parent_table
+    srcfrg_table = h5t.srcfrg_table
     mses = []
-    for row in parent_table.iterrows():
+    for i,row in enumerate(tqdm(parent_table.iterrows(),total=len(parent_table))):
+        if head:
+            if i>head:
+                break
         mse = MseSpec.from_h5_row(row)
         if mse.src_frag_ids:
-            frags = srcfrg_table.where("({mini} <= idx) & (idx <= {maxi})")
+            frg_ids = sorted([x for x in mse.src_frag_ids if x!=0])
+            mini,maxi = frg_ids[0],frg_ids[-1]
+            frags = srcfrg_table.where("({mini} <= idx) & (idx <= {maxi})".format(mini=mini,maxi=maxi))
             for row in frags:
                 mse.add_src_frag(MseSpec.from_h5_row(row))
         mses.append(mse)

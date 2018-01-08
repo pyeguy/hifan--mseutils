@@ -45,12 +45,13 @@ def create_h5_file(fname,title=''):
     srcfrg_tbl = h5.create_table(group,'source_frags',MSE,"Source Fragments")
     return h5_ret_tup(h5,group,parent_table,srcfrg_tbl)
 
-def open_h5_file(fname,mode,group_name,table_name):
+def open_h5_file(fname,mode,group_name,parent_table_name,srcfrg_tbl_name):
     '''return a h5_ret_tup'''
     h5 = tbls.open_file(fname,mode)
     group = h5.get_node("/{}".format(group_name))
-    table = h5.get_node("/{}/{}".format(group_name,table_name))
-    return h5_ret_tup(h5,group,table)
+    parent_table = h5.get_node("/{}/{}".format(group_name,parent_table_name))
+    srcfrg_tbl = h5.get_node("/{}/{}".format(group_name,srcfrg_tbl_name))
+    return h5_ret_tup(h5,group,parent_table,srcfrg_tbl)
 
 def add_mse(mse,idx,parent_t,srcfrg_t):
     '''
@@ -76,7 +77,7 @@ def add_mse(mse,idx,parent_t,srcfrg_t):
     r['src_frag_ids'] = srcfrgarr
     r.append()
 
-    # this should be recursive?
+    # should this be recursive?
     for srcfrg in mse.src_frags:
         r = srcfrg_t.row
         idx +=1
