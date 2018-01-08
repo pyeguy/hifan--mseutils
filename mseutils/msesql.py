@@ -9,6 +9,7 @@ import json
 
 
 CREATE_TBL_SQL = """
+    DROP TABLE IF EXISTS {tbl_name};
     CREATE TABLE {tbl_name}(
     idx INTEGER PRIMARY KEY,
     sampid TEXT,
@@ -22,7 +23,7 @@ CREATE_TBL_SQL = """
     ms2_data TEXT,
     mgf_files TEXT,
     src_frag_ids TEXT
-    )
+    );
 
     """
 CREATE_INDEX_SQL = """
