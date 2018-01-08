@@ -70,7 +70,7 @@ def load_rep_csv(csv_file):
         mss.append(ms)
     return mss
 
-def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={}):
+def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={},forceRep=False):
     '''
     Loads a MS1 rep file and the MS2 rep_frag file and then combines all the frags
     inso the MS1 masses where they exist.
@@ -102,9 +102,11 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
                     print(search_ms.__repr__())
                     print(ms.__repr__())
                     raise e
-        if len(search_ms.mgf_files) >= 2:
+        if forceRep:
+            if len(search_ms.mgf_files) >= 2:
+                cmss.append(search_ms)
+        else:
             cmss.append(search_ms)
-
     # comb = len(cmss)
     # print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
     return cmss
