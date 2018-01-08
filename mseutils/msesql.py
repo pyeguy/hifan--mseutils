@@ -89,7 +89,7 @@ def _make_val_tup(idx,mse):
         len(mse.mgf_files), #this shouldn't be necissary..
         mse.i,
         json.dumps([[mz.mz,i] for mz,i in mse.ms2_data.items()]),
-        json.dumps(set(mse.mgf_files)),
+        json.dumps(list(mse.mgf_files)), #coersce to list for json ser
         json.dumps([idx+i+1 for i in range(len(mse.src_frags))])
         )
     return idx,vals

@@ -739,7 +739,7 @@ class MseSpec(object):
 
     '''
 
-    def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=[],n=0,src_frag=[],rt_window=RT_WINDOW,ccs_ppt=CCS_PPT,**kwargs):
+    def __init__(self,mz,rt,ccs,ms2_data,i,mgf_files=set(),n=0,src_frag=[],rt_window=RT_WINDOW,ccs_ppt=CCS_PPT,**kwargs):
         '''
         Args:
             mz (MZ) : the mz of the parent ion
@@ -749,7 +749,7 @@ class MseSpec(object):
             i (float) : the intensity of the parent ion
             n (int) : number of specs that make up the MseSpec obj
             src_frag (list) : a list of other MseSpecs that are source fragments of this spec 
-            mgf_files (list) : a list of the mgf files that gave rise to the data
+            mgf_files (set) : a list of the mgf files that gave rise to the data
             rt_window (float) : rt window in minutes
             ccs_window : ccs error in parts per thousand ppt
         ToDo:
@@ -764,7 +764,7 @@ class MseSpec(object):
         self.mgf_files = mgf_files #needs work
         self.n = n
         self.i = i
-        self.src_frags = []
+        self.src_frags = set()
         for name,att in kwargs.items():
             self.__setattr__(name,att)
 
@@ -773,7 +773,7 @@ class MseSpec(object):
         '''instantiate from a dict, if you are into that kind of thing'''
         indict['mz'] = MZ(indict['mz'],ppm=indict['ppm'],z=indict['z'])
         indict['ms2_data'] = MS2D(indict['mz'],indict['i'],json.loads(indict['ms2_data']))
-        indict['mgf_files'] = json.loads(indict['mgf_files'])
+        indict['mgf_files'] = set(json.loads(indict['mgf_files']))
         indict['src_frag_ids'] = json.loads(indict["src_frag_ids"])
         return cls(**indict)
     
@@ -818,7 +818,7 @@ class MseSpec(object):
         intarr = mgfd['intensity array']
         MZarr = [MZ(x,ppm=MS2_PPM) for x in mzarr]
         ms2_data = MS2D(mz,i,list(zip(MZarr,intarr)))
-        mgf_files = [mgfname]
+        mgf_files = set(mgfname)
 
         return cls(mz=mz, rt=rt, ccs=ccs, i=i,
             ms2_data=ms2_data, mgf_files=mgf_files)
@@ -830,7 +830,7 @@ class MseSpec(object):
         ms2_data = MS2D(mz,i,[(MZ(mz,1,MS2_PPM),i) for mz,i in row['ms2_data'] if mz != 0.0])
         rt = row['rt']
         ccs = row['ccs']
-        mgf_files = [s for s in row['mgf_files'].decode().split('|')]
+        mgf_files = {s for s in row['mgf_files'].decode().split('|')}
         src_frag_ids = sorted([x for x in row['src_frag_ids'] if x!=0])
         return cls(mz=mz, rt=rt, ccs=ccs, i=i,
             ms2_data=ms2_data, mgf_files=mgf_files, src_frag_ids=src_frag_ids)
@@ -913,14 +913,14 @@ class MseSpec(object):
     
     def __add__(self,other):
         if not isinstance(other,self.__class__):
-            raise TypeError(type(other))
+            raise TypeError("Expected MseSpec got : {}".format(type(other)))
         nmz = (self.mz + other.mz) / 2
         nrt = (self.rt + other.rt) / 2
         nccs = (self.ccs + other.ccs) / 2 
         nms2_data = copy(self.ms2_data).update(other.ms2_data)
         nn = self.n + 1
         i = (self.i + other.i) / 2 
-        mgf_files = self.mgf_files + other.mgf_files
+        mgf_files = self.mgf_files | other.mgf_files
         return MseSpec(nmz,nrt,nccs,nms2_data,n=nn,i=i,mgf_files=mgf_files)
 
     def __radd__(self,other):
@@ -935,7 +935,7 @@ class MseSpec(object):
         self.ms2_data.update(other.ms2_data)
         self.i = (self.i + other.i) / 2
         self.n += 1
-        self.mgf_files.extend(other.mgf_files)
+        self.mgf_files = self.mgf_files | other.mgf_files
         return self
 
 

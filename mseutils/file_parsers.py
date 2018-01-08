@@ -41,7 +41,7 @@ def load_frag_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
             rt=rt,
             ccs=ccs,
             ms2_data=ms2,
-            mgf_files=[mgf_fname],
+            mgf_files={mgf_fname},
             i = preci, 
             **molspec_kwargs)
         mss.append(ms)
@@ -98,7 +98,7 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={})
                         search_ms += ms
 
                 except Exception as e:
-                    pritn("Exception in Combining following MseSpecs:")
+                    print("Exception in Combining following MseSpecs:")
                     print(search_ms.__repr__())
                     print(ms.__repr__())
                     raise e
