@@ -86,22 +86,21 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={},
     mss = load_frag_csv(frag_csv_file)
     smss = SortedCollection(mss,key= lambda x:x.rt.val)
     cmss = []
-
+    
     # for search_ms in tqdm(pmss,desc="combining MseSpec's"):
     for search_ms in pmss: # no pbar
-        search_ms = copy(search_ms) # added copy here... necissary?
+        # search_ms = copy(search_ms) # added copy here... necissary?
         rt_chunk = smss.find_between(*search_ms.rt.val_range)
         if rt_chunk:
             for i,ms in enumerate(rt_chunk):
-                try:
-                    if search_ms == ms:
+                if search_ms == ms:
+                    try:
                         search_ms += ms
-
-                except Exception as e:
-                    print("Exception in Combining following MseSpecs:")
-                    print(search_ms.__repr__())
-                    print(ms.__repr__())
-                    raise e
+                    except Exception as e:
+                        print("Exception in Combining following MseSpecs:")
+                        print(search_ms.__repr__())
+                        print(ms.__repr__())
+                        raise e
         if forceRep:
             if len(search_ms.mgf_files) >= 2:
                 cmss.append(search_ms)

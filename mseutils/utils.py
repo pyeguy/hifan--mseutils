@@ -772,7 +772,8 @@ class MseSpec(object):
     def from_sqlite_dict(cls,indict):
         '''instantiate from a dict, if you are into that kind of thing'''
         indict['mz'] = MZ(indict['mz'],ppm=indict['ppm'],z=indict['z'])
-        indict['ms2_data'] = MS2D(indict['mz'],indict['i'],json.loads(indict['ms2_data']))
+        ms2mzarr = [(MZ(mz,ppm=MS2_PPM),i) for mz,i in json.loads(indict['ms2_data'])]
+        indict['ms2_data'] = MS2D(indict['mz'],indict['i'],ms2mzarr)
         indict['mgf_files'] = set(json.loads(indict['mgf_files']))
         indict['src_frag_ids'] = json.loads(indict["src_frag_ids"])
         return cls(**indict)

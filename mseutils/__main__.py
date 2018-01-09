@@ -56,7 +56,8 @@ def parse_args():
     parser.add_argument("--tolerances",help='print the tolerances used',action="store_true")
     parser.add_argument("--h5",help="write an HDF5 file with all the Mse data in the path",action="store_true")
     parser.add_argument("--sqlite",help="write to a SQLite database with all the Mse data",action="store_true")
-    
+    parser.add_argument("-f","--force_frag_rep",help="force all parent masses to have frags from multiple mgf files",action="store_true")
+    parser.add_argument("-o","--output",help='name of output file for sqlite or h5',default="Output")
     args = parser.parse_args()
     return args
 
@@ -89,8 +90,8 @@ def gen_rep_file_pairs(path):
             print("Bad sampid {}".format(sampid))
     return rep_file_pairs
 
-def load_and_src_frag(rft,write_flat_file=False):
-    mses = file_parsers.load_rep_and_frags_csv(rft.rep_fname,rft.frag_fname)
+def load_and_src_frag(rft,forceRep,write_flat_file=False,):
+    mses = file_parsers.load_rep_and_frags_csv(rft.rep_fname,rft.frag_fname,forceRep=forceRep)
     combined = src_frags(mses)
     sampid = rft.sampid
     if write_flat_file:
@@ -126,37 +127,49 @@ def main():
     if args.source_frags:
         rfts = gen_rep_file_pairs(args.source_frags)
         if args.h5:
-            h5t = mseh5.create_h5_file("Output.h5")
+            h5t = mseh5.create_h5_file("{fname}.h5".format(fname=args.output))
         if args.sqlite:
-            conn = msesql.create_db("Output")
+            conn = msesql.create_db("{fname}".format(fname=args.output))
 
         ################################
         ## Single Proc for Debugging ##
         ################################
         # idx =0
         # for rft in rfts:
-        #     sampid,mses = load_and_src_frag(rft)
-        #     if args.h5:
-        #          idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)
+        #     sampid,mses = load_and_src_frag(rft,forceRep=args.force_frag_rep,)
+        #     if args.h5 or args.sqlite:
+        #         if args.h5:
+        #             idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)
+        #         if args.sqlite:
+        #             idx = msesql.add_mses(conn,mses,sampid=sampid,idx=idx)
+
  
         with ProcessPoolExecutor(max_workers=args.procs)  as executor:
             # clearscreen()
             pbar = tqdm(total=len(rfts),desc='Combining Specs')
+            
             if not args.h5 and not args.sqlite:
-                futs = [executor.submit(load_and_src_frag,rft,write_flat_file=True) for rft in rfts]
+                write_flat_file= True
             else:
-                futs = [executor.submit(load_and_src_frag,rft) for rft in rfts]
+                write_flat_file= False
+
+            futs = [executor.submit(load_and_src_frag,
+                                    rft,
+                                    forceRep=args.force_frag_rep, 
+                                    write_flat_file=write_flat_file)
+                                    for rft in rfts]
             idx =0
             for fut in as_completed(futs):
                 if args.h5 or args.sqlite:
                     e = fut.exception()
                     if e:
                         raise e
-                    sampid,mses = fut.result()
-                    if args.h5:
-                        idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)
-                    if args.sqlite:
-                        idx = msesql.add_mses(conn,mses,sampid=sampid,idx=idx)
+                    if fut.result():
+                        sampid,mses = fut.result()
+                        if args.h5:
+                            idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)
+                        if args.sqlite:
+                            idx = msesql.add_mses(conn,mses,sampid=sampid,idx=idx)
 
                 pbar.update()
         pbar.close()
