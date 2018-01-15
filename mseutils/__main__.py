@@ -102,9 +102,7 @@ def gen_rep_file_pairs(path):
 
 def load_and_src_frag(rft,forceRep,write_flat_file=False,):
     mses = file_parsers.load_frag_csv_from_prod_seq(rft.frag_fname,forceRep=forceRep)
-    print("MSES LEN: ",len(mses))
     combined = src_frags(mses)
-    print("COMBINED LEN: ",len(combined))
     sampid = rft.sampid
     if write_flat_file:
         filewriter = FileWriter(
@@ -160,7 +158,9 @@ def main():
         #         if args.sqlite:
         #             idx = msesql.add_mses(conn,mses,sampid=sampid,idx=idx)
 
- 
+        ###############################
+        # Multi Proc Production Code ##
+        ###############################
         with ProcessPoolExecutor(max_workers=args.procs)  as executor:
             # clearscreen()
             pbar = tqdm(total=len(rfts),desc='Combining Specs')
