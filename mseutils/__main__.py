@@ -30,16 +30,16 @@ class FileWriter(object):
     def __enter__(self):
         self._open_file()
     
-    def __exit__(self):
+    def __exit__(self,exception_type, exception_value, traceback):
         self.fout.close()
 
     def close(self):
         self.fout.close()
     
-    def write(self,d):
+    def write_dict(self,d):
         if self.headers is None:
            self.headers = list(d.keys())
-        if not self.fout:
+        if self.fout is None:
             self._open_file()
 
         for header in self.headers:
@@ -48,6 +48,16 @@ class FileWriter(object):
             except KeyError:
                 print("{}{}".format('NaN',self.delim),file=self.fout,end='',sep='')
         print('',file=self.fout)
+
+    def write_row(self,r):
+        if self.fout is None:
+            self._open_file()
+        for val in r:
+            print("{}{}".format(val,self.delim),file=self.fout,end='',sep='')
+        print('',file=self.fout)
+
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="MseUtils")
@@ -91,14 +101,19 @@ def gen_rep_file_pairs(path):
     return rep_file_pairs
 
 def load_and_src_frag(rft,forceRep,write_flat_file=False,):
-    mses = file_parsers.load_rep_and_frags_csv(rft.rep_fname,rft.frag_fname,forceRep=forceRep)
+    mses = file_parsers.load_frag_csv_from_prod_seq(rft.frag_fname,forceRep=forceRep)
+    print("MSES LEN: ",len(mses))
     combined = src_frags(mses)
+    print("COMBINED LEN: ",len(combined))
     sampid = rft.sampid
     if write_flat_file:
-        filewriter = FileWriter(os.path.join(rft.path,"{sampid}_combined.{ext}".format(sampid=rft.sampid,ext='txt')))
-        for comb_mse in combined:
-            for fragd in comb_mse.to_frags():
-                filewriter.write(fragd)
+        filewriter = FileWriter(
+            os.path.join(rft.path,"{sampid}_srcfragged.{ext}".format(sampid=rft.sampid,ext='csv')),
+            delim=',',
+            headers = ["CCS","PrecIntensity","PrecMz","Precursor","RetTime","reps","Sample"])
+        with filewriter:
+            for comb_mse in combined:
+                filewriter.write_row(comb_mse.to_prec_csv_row()) 
         return None
     else:
         return sampid,combined
@@ -131,12 +146,14 @@ def main():
         if args.sqlite:
             conn = msesql.create_db("{fname}".format(fname=args.output))
 
-        ################################
-        ## Single Proc for Debugging ##
-        ################################
+        ###############################
+        # Single Proc for Debugging ##
+        ###############################
         # idx =0
         # for rft in rfts:
-        #     sampid,mses = load_and_src_frag(rft,forceRep=args.force_frag_rep,)
+        #     # sampid,mses = load_and_src_frag(rft,forceRep=args.force_frag_rep,)
+        #     mses = load_and_src_frag(rft,forceRep=args.force_frag_rep,write_flat_file=True)
+
         #     if args.h5 or args.sqlite:
         #         if args.h5:
         #             idx = mseh5.add_mses(mses,h5t,sampid=sampid,idx=idx)

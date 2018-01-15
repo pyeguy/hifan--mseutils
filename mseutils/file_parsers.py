@@ -47,6 +47,76 @@ def load_frag_csv(csv_file,mz_kwargs={},molspec_kwargs={}):
         mss.append(ms)
     return mss
 
+
+def load_frag_csv_from_prod_seq(csv_file,forceRep=False,mz_kwargs={},molspec_kwargs={}):
+    '''
+    Loads a csv file of that includes fragments and returns a list of MseSpec
+    '''
+    # print("reading csv file and grouping...")
+    df = pd.read_csv(csv_file)
+    # df = df[df.Ar1 > 0.33]
+    gb = df.groupby(("MgfFileName","Precursor"))
+    combd = defaultdict(list)
+    # print('creating MseSpecs')
+    # for gtup,gdf in tqdm(gb,"processing file"):
+    
+    for gtup,gdf in gb: # no pbar
+        bad_egg = False
+        mgf_fname,prec, = gtup
+        kwargs = {"Precursor":prec}
+        kwargtups = (
+                    ('rt',"RetTime"),
+                    ('ccs',"CCS"),
+                    ('mz',"PrecMz"),
+                    ('z',"PrecZ"),
+                    ('i','PrecIntensity'),
+                    ('sampid','Sample'))
+        for key,valstr in kwargtups:
+            valset = set(gdf[valstr])
+            if len(valset) !=1 :
+                bad_egg = True
+                # print(valstr,':',valset)
+                # raise ValueError('Too many unique {} values.'.format(valstr))
+                # raise ValueError('Too many unique {} values.'.format(valstr))
+
+            val = valset.pop()
+            kwargs[key] = val
+
+        if bad_egg:
+            continue
+
+        mzo = MZ(mz=kwargs['mz'],z=kwargs['z'],**mz_kwargs)
+        del kwargs['mz']
+        del kwargs['z']
+
+        ms2vals = gdf[['ProdMz','ProdIntensity']].values
+        if ms2vals.any():
+            ms2 = MS2D(mzo,kwargs['i'],[(MZ(mz,ppm=MS2_PPM),i) for mz,i in ms2vals])
+            ms2.filter()
+        else:
+            ms2 = MS2D(mzo,kwargs['i'])
+        
+        mse = MseSpec(
+            mz=mzo,
+            ms2_data=ms2,
+            mgf_files={mgf_fname},
+            **kwargs)
+        combd[mse.Precursor].append(mse)
+
+    if forceRep:
+        todel = [k for k,v in combd.items() if len(v) < 2]
+        for k in todel: del combd[k]
+
+    cmss = [_quick_comb(mses) for mses in combd.values()]
+    return cmss
+
+def _quick_comb(mses):
+    parent = mses.pop(0)
+    for mse in mses:
+        parent += mse
+    return parent
+
+
 def load_rep_csv(csv_file):
     '''
     Loads a csv file of replicate MS1 masses and returns a list 
@@ -80,17 +150,17 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={},
         mz_kwargs (dict) : a dict of any kwargs to pass to the MZ instantiation
         msespec_kwargs (dict) : a dict of any kwargs to pass to the MseSpec instantiation
     Returns:
-        cmss (list) : combined replicate MseSpecs 
+        combined_mss (list) : combined replicate MseSpecs 
     '''
-    pmss = load_rep_csv(rep_csv)
-    mss = load_frag_csv(frag_csv_file)
-    smss = SortedCollection(mss,key= lambda x:x.rt.val)
-    cmss = []
+    parent_mss = load_rep_csv(rep_csv)
+    frag_mses = load_frag_csv(frag_csv_file)
+    sc_frag_mses = SortedCollection(frag_mses,key= lambda x:x.rt.val)
+    combined_mss = []
     
     # for search_ms in tqdm(pmss,desc="combining MseSpec's"):
-    for search_ms in pmss: # no pbar
+    for search_ms in parent_mss: # no pbar
         # search_ms = copy(search_ms) # added copy here... necissary?
-        rt_chunk = smss.find_between(*search_ms.rt.val_range)
+        rt_chunk = sc_frag_mses.find_between(*search_ms.rt.val_range)
         if rt_chunk:
             for i,ms in enumerate(rt_chunk):
                 if search_ms == ms:
@@ -102,13 +172,13 @@ def load_rep_and_frags_csv(rep_csv,frag_csv_file,mz_kwargs={},msespec_kwargs={},
                         print(ms.__repr__())
                         raise e
         if forceRep:
-            if len(search_ms.mgf_files) >= 2:
-                cmss.append(search_ms)
+            if len(search_ms.mgf_files) > 1:
+                combined_mss.append(search_ms)
         else:
-            cmss.append(search_ms)
-    # comb = len(cmss)
+            combined_mss.append(search_ms)
+    # comb = len(combined_mss)
     # print("{} combined spec ({:.2f}%)".format(comb,(len(mss)-comb)/len(mss) *100))
-    return cmss
+    return combined_mss
 
 def load_h5(fname,mode='r', group_name='msedata',parent_tbl='mse_specs', srcfrg_tbl='source_frags',head=None):
     '''dont forget to add in source frags'''

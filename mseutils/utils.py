@@ -238,7 +238,7 @@ class MZ(object):
 
     """
     
-    __slots__ = ['mh', 'z','mz', 'ppm', 'error', 'mz_range','i']
+    __slots__ = ('z','mz', 'val' ,'ppm', 'error', 'mz_range','i')
     
     def __init__(self,mz,z=1,ppm=MZ_PPM):
         '''
@@ -251,9 +251,10 @@ class MZ(object):
 
         '''
         self.mz = mz
+        self.val = mz # for compatibility with FuzzyCompare class
         self.z = int(z)
         self.ppm = ppm
-        self.mh = (self.mz / self.z) - ((self.z-1) * H) #assumes only H adducts
+        # self.mh = (self.mz / self.z) - ((self.z-1) * H) #assumes only H adducts
         self.error = self.mz * (self.ppm / 1e6)
         self.mz_range = (
             (self.mz - self.error), 
@@ -847,8 +848,8 @@ class MseSpec(object):
             relinties = inties / np.sum(inties)
             for mz,i in zip(mzvs,relinties):
                 v[int(mz)] += i
-            
         return v
+            
 
     @property
     def n_src_frags(self):
@@ -863,11 +864,22 @@ class MseSpec(object):
         'ccs' : self.ccs.val,
         'mz' : self.mz.mz,
         'z' : self.mz.z,
-        'ms2' : list(self.ms2_data.items()),
+        'ms2' : json.dumps(list(self.ms2_data.items())),
         'mgf_files' : self.mgf_files,
-        'src_frags' : [srcf.mz.mz for srcf in self.src_frags],
+        'src_frags' : json.dumps([srcf.mz.mz for srcf in self.src_frags]),
         }
         return d
+
+    def to_prec_csv_row(self):
+        row = [
+            self.ccs.val,
+            self.i,
+            self.mz.val,
+            self.Precursor,
+            self.rt.val,
+            len(self.mgf_files),
+            self.sampid]
+        return row
 
 
     def to_frags(self):
@@ -880,8 +892,8 @@ class MseSpec(object):
         'parent_intsensity': self.i,
         'frag_mz' : fragmz.mz,
         'fag_intensity' : fragi,
-        'mgf_files' : self.mgf_files,
-        'src_frags' : ','.join([srcf.mz.mz for srcf in self.src_frags]),
+        'mgf_files' : json.dumps(self.mgf_files),
+        'src_frags' : json.dumps([srcf.mz.mz for srcf in self.src_frags]),
         } for fragmz,fragi in self.ms2_data.items()]
         return l
 
