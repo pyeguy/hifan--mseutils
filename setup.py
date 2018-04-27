@@ -6,7 +6,8 @@ setup(
     packages=["mseutils"],
     entry_points={
       'console_scripts': [
-          'mseutils = mseutils.__main__:main'
+          'mseutils = mseutils.__main__:main',
+          'csv2mgf = mseutils.csv2mgf:main'
       ]
     },
     )

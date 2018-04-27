@@ -203,7 +203,7 @@ class RT(FuzzyCompare):
 
 # this is out here to make the CCS class pickalable. 
 def _ccs_efunc(x,ppt):
-    return x*(ppt/1e3)
+    return x* (ppt*1E-3)
 
 class CCS(FuzzyCompare):
     '''FuzzyCompare subclass for ccs values'''
@@ -864,7 +864,7 @@ class MseSpec(object):
         'ccs' : self.ccs.val,
         'mz' : self.mz.mz,
         'z' : self.mz.z,
-        'ms2' : json.dumps(list(self.ms2_data.items())),
+        'ms2' : json.dumps([[mz.mz,val] for mz,val in self.ms2_data.items()]),
         'mgf_files' : self.mgf_files,
         'src_frags' : json.dumps([srcf.mz.mz for srcf in self.src_frags]),
         }
@@ -897,6 +897,19 @@ class MseSpec(object):
         } for fragmz,fragi in self.ms2_data.items()]
         return l
 
+    def to_mgf_dict(self):
+        params ={
+            'RetTime' : self.rt.val,
+            'Charge' : f"{self.mz.z}+",
+            'CCS' : self.ccs.val,
+            'PepMass' : [self.mz.val,self.i],
+            }
+        spectra = {
+            'm/z array' : [mz.val for mz in self.ms2_data.keys()],
+            'intensity array' : [i for i in self.ms2_data.values()],
+            'params' : params
+            }
+        return spectra
 
     ################
     # Comparisons  #
@@ -1019,3 +1032,146 @@ def src_frags(mol_specs):
             combined.append(parent)
     return combined
 
+def array_fuzzy_eq(a1,a2,thresh=None,ppm=None):
+    a1 = np.asarray(a1)
+    a2 = np.asarray(a2)
+    def _gen_error_arrays(a):
+        if ppm:
+            error_arr = a1*(ppm*1E-6)
+        elif thresh:
+            error_arr = np.full(a.shape,thresh)
+        else:
+            raise Exception("Must provide either thresh or ppm")
+        return a-error_arr,a+error_arr
+    a1a,a1b = _gen_error_arrays(a1)
+    a2a,a2b = _gen_error_arrays(a2)
+    res_arr = (a2a <= a1b) & (a1b <= a2b)
+    return res_arr
+
+def _mz_efunc(mz,ppm):
+    return mz * (ppm*1E-6)
+
+def _error_windows(rt,ccs,mz,pmz):
+    rtw = rt -(RT_WINDOW/2),rt +(RT_WINDOW/2),
+    ccsw = ccs - _ccs_efunc(ccs,CCS_PPT), ccs + _ccs_efunc(ccs,CCS_PPT)
+    mzw = mz - _mz_efunc(mz,MZ_PPM), mz + _mz_efunc(mz,MZ_PPM)
+    pmzw = pmz - _mz_efunc(pmz,MS2_PPM), pmz + _mz_efunc(pmz,MS2_PPM)
+    return (rtw,ccsw,mzw,pmzw)
+
+def get_matches_old(rtt,ccst,mzt,pmzt,searcha):
+    betweens = _error_windows(*searcha)
+    rtw_idxs = set(range(*np.searchsorted(rtt[0],betweens[0],sorter=rtt[1])))
+    ccsw_idxs = set(range(*np.searchsorted(ccst[0],betweens[1],sorter=ccst[1])))
+    mzw_idxs = set(range(*np.searchsorted(mzt[0],betweens[2],sorter=mzt[1])))
+    pmzw_idxs = set(range(*np.searchsorted(pmzt[0],betweens[3],sorter=pmzt[1])))
+    return tuple(rtw_idxs & ccsw_idxs & mzw_idxs & pmzw_idxs)
+
+def get_matches(rtt,ccst,mzt,pmzt,searcha):
+    betweens = _error_windows(*searcha)
+    results = np.array((
+        np.searchsorted(rtt[0],betweens[0],sorter=rtt[1]),
+        np.searchsorted(ccst[0],betweens[1],sorter=ccst[1]),
+        np.searchsorted(mzt[0],betweens[2],sorter=mzt[1]),
+        np.searchsorted(pmzt[0],betweens[3],sorter=pmzt[1])
+        ))
+    return range(results[:,0].max(),results[:,1].min())
+
+def get_matches_simple(numarr,sorter,searcha):
+    betweens = _error_windows(*searcha)
+    results = np.array((
+        np.searchsorted(numarr[:,0],betweens[0],sorter=sorter[:,0]),
+        np.searchsorted(numarr[:,1],betweens[1],sorter=sorter[:,1]),
+        np.searchsorted(numarr[:,2],betweens[2],sorter=sorter[:,2]),
+        np.searchsorted(numarr[:,3],betweens[3],sorter=sorter[:,3])
+        ))
+    mins = results[:,0]
+    maxs = results[:,1]-1
+    rows = [0,1,2,3]
+    return range(sorter[mins,rows].max(),sorter[maxs,rows].min())
+
+from functools import reduce
+
+def get_matches_simple_set(numarr,sorter,searcha):
+    betweens = _error_windows(*searcha)
+    rt = np.searchsorted(numarr[:,0],betweens[0],sorter=sorter[:,0])
+    rts= sorter[rt[0]:rt[1],0]
+    ccs = np.searchsorted(numarr[:,1],betweens[1],sorter=sorter[:,1])
+    ccss= sorter[ccs[0]:ccs[1],1]
+    intersect = np.intersect1d(rts,ccss)
+    if not intersect.any():
+        return np.empty(0)
+    mz = np.searchsorted(numarr[:,2],betweens[2],sorter=sorter[:,2])
+    mzs= sorter[mz[0]:mz[1],2]
+    intersect = np.intersect1d(mzs,intersect)
+    if not intersect.any():
+        return np.empty(0)
+    pmz = np.searchsorted(numarr[:,3],betweens[3],sorter=sorter[:,3])
+    pmzs= sorter[pmz[0]:pmz[1],3]
+    intersect = np.intersect1d(pmzs,intersect)
+    if not intersect.any():
+        return np.empty(0)
+    # rts= set(sorter[rt[0]:rt[1],0])
+    # ccss= set(sorter[ccs[0]:ccs[1],1])
+    # mzs= set(sorter[mz[0]:mz[1],2])
+    # pmzs= set(sorter[pmz[0]:pmz[1],3])    
+    # return tuple(rts & ccss & mzs & pmzs)
+
+    return intersect
+    
+from scipy import sparse
+
+def get_adjacency_matrix(df,cols2search=["RetTime","CCS","PrecMz","ProdMz"]):
+    numarr = df[cols2search].values
+    sorter = np.argsort(numarr,axis=0)
+    # rta,ccsa,mza,pmza= numarr.T
+    # rtt = rta,np.argsort(rta)
+    # ccst = ccsa,np.argsort(ccsa)
+    # mzt = mza,np.argsort(mza)
+    # pmzt = pmza,np.argsort(pmza)
+    
+    ijarr = []
+    for idx,searcha in enumerate(tqdm(numarr)):
+        # matches = get_matches(rtt,ccst,mzt,pmzt,searcha)
+        matches = get_matches_simple_set(numarr,sorter,searcha)
+        if matches:
+            for match in matches:
+                ijarr.append((idx,match))  
+    
+    ijarr = np.asarray(ijarr)
+    row,col = ijarr.T
+    mat_shape = (df.shape[0],df.shape[0])
+    adjmat = sparse.coo_matrix(
+        (np.full(ijarr.shape[0],1,dtype='uint8'), #data of 1s
+        (row,col)), # row and col idxes for coo_matrix
+        shape=mat_shape)
+    return adjmat
+
+def get_adjacency_matrix_lil(df,cols2search=["RetTime","CCS","PrecMz","ProdMz"]):
+    numarr = df[cols2search].values
+    sorter = np.argsort(numarr,axis=0)
+    # rta,ccsa,mza,pmza= numarr.T
+    # rtt = rta,np.argsort(rta)
+    # ccst = ccsa,np.argsort(ccsa)
+    # mzt = mza,np.argsort(mza)
+    # pmzt = pmza,np.argsort(pmza)
+    
+
+    mat_shape = (df.shape[0],df.shape[0])
+    adjmat = sparse.lil_matrix(mat_shape)
+    for idx,searcha in enumerate(tqdm(numarr)):
+        # matches = get_matches(rtt,ccst,mzt,pmzt,searcha)
+        matches = get_matches_simple_set(numarr,sorter,searcha)
+        if matches.any():
+            # print(searcha)
+            # print_matches_simple(numarr,sorter,searcha)
+            for match in matches:
+                adjmat[idx,match] = 1
+
+    return adjmat
+
+def print_matches_simple(numarr,sorter,searcha):
+    betweens = _error_windows(*searcha)
+    print(np.searchsorted(numarr[:,0],betweens[0],sorter=sorter[:,0]))
+    print(np.searchsorted(numarr[:,1],betweens[1],sorter=sorter[:,1]))
+    print(np.searchsorted(numarr[:,2],betweens[2],sorter=sorter[:,2]))
+    print(np.searchsorted(numarr[:,3],betweens[3],sorter=sorter[:,3]))
